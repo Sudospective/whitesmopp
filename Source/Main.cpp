@@ -298,6 +298,7 @@ void SMOReader(Clients Client)
 				continue;
 
 			m_Mutex.lock();
+			result = std::find_if(ConnectedClients.begin(), ConnectedClients.end(), [&Client](Clients c) { return Client.Client == c.Client; });
 			if (read == 0)
 			{
 				std::cout << "User: " << c.UserName << " '" << c.IP << "' Disconnected.\n";
@@ -670,7 +671,8 @@ int main()
 						else if (UserType == 1)
 							usertype = "[|c00000ffRoomHost|c0ffffff] ";
 
-						std::string Out = std::string(1, static_cast<char>(ProtocolVersion + 7)) + usertype + UserName + ": " + Input.erase(0, 5).erase(Input.find_first_of('\0'));
+						std::string Text = Input;
+						std::string Out = std::string(1, static_cast<char>(ProtocolVersion + 7)) + usertype + UserName + ": " + Text.erase(0, 5).erase(Text.find_first_of('\0'));
 						std::string Header = std::string(3, '\0') + std::string(1, static_cast<char>(Out.size()));
 						m_TCPServer->Send(c.Client, Header + Out);
 					}
