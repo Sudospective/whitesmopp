@@ -2,6 +2,8 @@ add_subdirectory(Libs)
 
 set(Source
 	main.cpp
+	game-manager.cpp
+	server-manager.cpp
 )
 
 add_executable(${PROJECT_NAME} ${Source})

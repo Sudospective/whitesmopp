@@ -1,6 +1,12 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 
-class Client {};
+#include <string>
+
+class Client {
+ public:
+  std::string name;
+  std::string IP;
+};
 
 #endif // CLIENT_HPP
