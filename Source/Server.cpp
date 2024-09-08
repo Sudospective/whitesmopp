@@ -7,6 +7,9 @@
 #include "ServerManager.hpp"
 
 Server::Server() {
+  _room.SetName("WE2024");
+  _room.SetDescription("White Elephant 2024");
+
   mINI::INIFile file("Config.ini");
   mINI::INIStructure ini;
   file.read(ini);
@@ -238,6 +241,29 @@ void Server::DisconnectClient(Client* client) {
     _connection->Send(client->GetSocket(), header + out);
   }
 }
+void Server::JoinRoom(Client* client, std::vector<std::string> values) {
+  if (_room.GetPassword().empty() || _room.GetPassword() == values[2]) {
+    client->roomID = _room.ID;
+    std::string roomNames = _room.GetName() + std::string(1, '\0') + _room.GetDescription() + std::string(1, '\0');
+    std::string roomStates = std::string(1, static_cast<char>(_room.GetState()));
+    std::string roomFlags = std::string(1, _room.flag ? '\1' : '\0');
+
+    std::string out = (
+      std::string(1, static_cast<char>(_protocolVersion + 12)) +
+      std::string(1, '\1') +
+      std::string(1, '\0') +
+      values.at(0) +
+      std::string(1, '\0') +
+      std::string(1, '\1') +
+      std::string(1, static_cast<char>(1)) +
+      roomNames +
+      roomStates +
+      roomFlags
+    );
+    std::string header = std::string(3, '\0') + std::string(1, static_cast<char>(out.size()));
+    _connection->Send(client->GetSocket(), header + out);
+  }
+}
 
 void Server::SMOListener() {
   std::cout << "Listening on port " << _port << std::endl;
@@ -264,7 +290,6 @@ void Server::SMOListener() {
         c.loggedIn = false;
         c.SetIP(ServerManager::GetInstance().currentIP);
         c.roomID = 0;
-        _room.GetPlayers().push_back(&c);
         readerThreads.push_back(std::thread([&](Client* client) { SMOReader(client); }, &c));
         ServerManager::GetInstance().connecting = false;
 

@@ -20,6 +20,7 @@ class Server {
   void Update(std::string ip, bool connecting);
   void ConnectClient(Client* client);
   void DisconnectClient(Client* client);
+  void JoinRoom(Client* client, std::vector<std::string> values);
 
  private:
   void SMOListener();

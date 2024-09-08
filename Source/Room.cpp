@@ -25,13 +25,13 @@ void Room::SetPassword(std::string password) {
 std::string Room::GetPassword() const {
   return _password;
 }
+void Room::SetState(int state) {
+  _state = state;
+}
+int Room::GetState() const {
+  return _state;
+}
 
-void Room::JoinPlayer(Client* player) {
-  _players.push_back(player);
-}
-void Room::RemovePlayer(Client* player) {
-  
-}
 std::vector<Client*> Room::GetPlayers() const {
   return _players;
 }
