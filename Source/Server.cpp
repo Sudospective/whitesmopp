@@ -92,6 +92,10 @@ bool Server::Start() {
     gotIP = false;
     _mutex.unlock();
   }
+
+  _running = false;
+  _mainThread->join();
+  return 0;
 }
 
 void Server::Update(std::string ip, bool connecting) {
@@ -145,6 +149,19 @@ void Server::Update(std::string ip, bool connecting) {
         }
       }
     }
+  }
+  for (Client* client : _room.GetPlayers()) {
+    _mutex.lock();
+    auto result = std::find_if(_room.GetPlayers().begin(), _room.GetPlayers().end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); });
+    Client* c = *result;
+    if (result != _room.GetPlayers().end()) {
+      c->connected = client->connected;
+      c->loggedIn = client->loggedIn;
+      c->roomID = client->roomID;
+      c->SetName(client->GetName());
+      c->SetType(client->GetType());
+    }
+    _mutex.unlock();
   }
 }
 void Server::ConnectClient(Client* client) {
