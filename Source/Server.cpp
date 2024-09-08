@@ -147,6 +147,24 @@ void Server::Update(std::string ip, bool connecting) {
     }
   }
 }
+void Server::ConnectClient(Client* client) {
+  for (Client* c : _room.GetPlayers()) {
+    if (c->roomID != client->roomID || c->GetName() == client->GetName())
+      continue;
+    std::string out = std::string(1, static_cast<char>(_protocolVersion + 7)) + "User joined: " + c->GetName();
+    std::string header = std::string(3, '\0') + std::string(1, static_cast<char>(out.size()));
+    _connection->Send(c->GetSocket(), header + out);
+  }
+}
+void Server::DisconnectClient(Client* client) {
+  for (Client* c : _room.GetPlayers()) {
+    if (c->roomID != client->roomID || c->GetName() == client->GetName())
+      continue;
+    std::string out = std::string(1, static_cast<char>(_protocolVersion + 7)) + "User Left: " + client->GetName();
+    std::string header = std::string(3, '\0') + std::string(1, static_cast<char>(out.size()));
+    _connection->Send(client->GetSocket(), header + out);
+  }
+}
 
 void Server::SMOListener() {
   std::vector<std::thread> readerThreads;

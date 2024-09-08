@@ -17,6 +17,8 @@ class Server {
  public:
   bool Start();
   void Update(std::string ip, bool connecting);
+  void ConnectClient(Client* client);
+  void DisconnectClient(Client* client);
 
  private:
   void SMOListener();

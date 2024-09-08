@@ -43,6 +43,7 @@ class Client {
  public:
   bool connected;
   bool loggedIn;
+  unsigned int roomID;
   std::vector<std::string> vInput;
 
  private:
