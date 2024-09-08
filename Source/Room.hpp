@@ -13,7 +13,7 @@ class Room {
   void SetOwner(Client& player);
   /// @brief Get the owner of the room.
   /// @return 
-  std::string GetOwner() const;
+  Client& GetOwner() const;
   /// @brief Set the name of the room.
   /// @param name 
   void SetName(std::string name);
