@@ -1,10 +1,15 @@
 #ifndef SERVER_MANAGER_HPP
 #define SERVER_MANAGER_HPP
 
+#include <string>
+
 class ServerManager {
  public:
   static ServerManager* GetInstance();
-  static void ListenerHandler();
+
+ public:
+  bool isConnecting;
+  std::string connectingIP;
 
  private:
   static ServerManager* _instance;

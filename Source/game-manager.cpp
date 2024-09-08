@@ -2,9 +2,7 @@
 
 GameManager* GameManager::_instance = nullptr;
 
-GameManager::GameManager() {
-  
-}
+GameManager::GameManager() {}
 
 GameManager* GameManager::GetInstance() {
   if (_instance == nullptr)

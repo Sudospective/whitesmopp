@@ -1,26 +1,48 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
+#include <mutex>
+#include <string>
+#include <thread>
 #include <vector>
 
-#include "SQLiteCpp/SQLiteCpp.h"
 #include "TCPServer.h"
 
-#include "client.hpp"
+struct Client {
+  std::string name;
+  std::string IP;
+  std::string gift;
+  ASocket::Socket* socket;
+};
 
 class Server {
  public:
-  void Start();
-  void Update();
+  Server();
+  ~Server();
 
  public:
-  std::string name;
-  std::string port;
-  std::vector<Client*> clients;
+  void Start();
+  void Stop();
+
+ public:
+  bool IsRunning() const;
+  unsigned int GetPort() const;
+  std::string GetName() const;
+  std::vector<Client*> GetPlayers() const;
+  CTCPServer* GetConnection() const;
 
  private:
-  SQLite::Database* _db;
+  bool _running;
+  std::mutex _mutex;
+  unsigned int _serverOffset;
+  unsigned int _serverVersion;
+  std::thread* _thread;
+  std::vector<Client*> _players;
   CTCPServer* _tcp;
+  Client* _owner;
+
+  const unsigned int _port = 8765;
+  const std::string _name = "White Elephant 2024";
 };
 
 #endif // SERVER_HPP

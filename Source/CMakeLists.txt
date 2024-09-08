@@ -3,6 +3,7 @@ add_subdirectory(Libs)
 set(Source
 	main.cpp
 	game-manager.cpp
+	server.cpp
 	server-manager.cpp
 )
 
@@ -12,11 +13,8 @@ target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 
 target_link_libraries(${PROJECT_NAME} 
 	socket
-	SQLiteCpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
-	Libs/mINI/src/
 	Libs/socket-cpp/Socket/
-	Libs/SQLiteCpp/include
 )
