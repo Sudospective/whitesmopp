@@ -18,7 +18,7 @@ class Server {
   unsigned int GetMaxPlayers() const;
   std::string GetName() const;
   std::string GetIP() const;
-  Room GetRoom() const;
+  const Room& GetRoom() const;
   CTCPServer* GetConnection() const;
 
  private:

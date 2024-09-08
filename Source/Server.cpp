@@ -48,15 +48,16 @@ Server::Server() {
 
   std::string IP = "unknown";
   bool gotIP = false;
+  std::mutex* mutex = &_mutex;
 
-  auto logPrinter = [&IP, &gotIP](const std::string& strLogMsg) {
+  auto logPrinter = [&IP, &gotIP, &mutex](const std::string& strLogMsg) {
     if (strLogMsg.find("Incoming connection from") != std::string::npos) {
-      //_mutex.lock();
+      mutex->lock();
       IP = strLogMsg;
       IP.erase(0, IP.find_first_of('\'') + 1);
       IP.erase(IP.find_first_of('\''), IP.length());
       gotIP = true;
-      //_mutex.unlock();
+      mutex->unlock();
     }
     else {
       //std::cout << strLogMsg << std::endl;
@@ -70,6 +71,21 @@ Server::~Server() {
   delete _connection;
 }
 
-Room Server::GetRoom() const {
+unsigned int Server::GetPort() const {
+  return _port;
+}
+unsigned int Server::GetMaxPlayers() const {
+  return _maxPlayers;
+}
+std::string Server::GetName() const {
+  return _name;
+}
+std::string Server::GetIP() const {
+  return _ip;
+}
+const Room& Server::GetRoom() const {
   return _room;
+}
+CTCPServer* Server::GetConnection() const {
+  return _connection;
 }
