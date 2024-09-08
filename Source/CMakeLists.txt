@@ -1,8 +1,10 @@
 add_subdirectory(Libs)
 
 set(Source
-Main.cpp
-Main.hpp
+	main.cpp
+	Client.cpp
+	Room.cpp
+	Server.cpp
 )
 
 add_executable(${PROJECT_NAME} ${Source})

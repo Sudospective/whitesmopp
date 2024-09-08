@@ -390,54 +390,57 @@ int main()
 	if (ServerName.empty())
 	{
 		ini["Server"]["Name"] = "New OpenSMO++ Server";
-		ServerName = "New OpenSMO++ Server";
+		ServerName = ini["Server"]["Name"];
 	}
 
 	if (ServerVersion <= 0)
 	{
 		ini["Server"]["ServerVersion"] = "128";
-		ServerVersion = 128;
+		ServerVersion = atol(ini["Server"]["ServerVersion"].c_str());
 	}
 
 	if (ProtocolVersion <= 0)
 	{
 		ini["Server"]["ProtocolVersion"] = "128";
-		ProtocolVersion = 128;
+		ProtocolVersion = atol(ini["Server"]["ProtocolVersion"].c_str());
 	}
 
 	if (ServerPort <= 0)
 	{
 		ini["Server"]["ServerPort"] = "8765";
-		ServerPort = 8765;
+		ServerPort = atol(ini["Server"]["ServerPort"].c_str());
 	}
 
 	if (MaxPlayers <= 0)
 	{
 		ini["Server"]["MaxPlayers"] = "255";
-		MaxPlayers = 255;
+		MaxPlayers = atol(ini["Server"]["MaxPlayers"].c_str());
 	}
 
 	if (ElevatedUserLogin.empty())
 	{
 		ini["Server"]["ServerPassword"] = "ChangeMe";
-		ElevatedUserLogin = "ChangeMe";
+		ElevatedUserLogin = ini["Server"]["ServerPassword"];
 	}
 
 	if (ServerDB.empty())
 	{
 		ini["ServerDB"]["File"] = "ServerDB.db";
-		ServerDB = "ServerDB.db";
+		ServerDB = ini["ServerDB"]["File"];
 	}
 
 	if (PWSalt.empty())
 	{
 		ini["ServerDB"]["PasswordSalt"] = "Pass";
-		PWSalt = "Pass";
+		PWSalt = ini["ServerDB"]["PasswordSalt"];
 	}
 
 	file.write(ini);
 
-	std::cout << "OpenSMO++ 1.0.2: By Jousway\n";
+	std::cout << "WhiteSMO++ 1.0: By Sudospective & Rya\n";
+	std::cout << "Original code by Jousway\n";
+	std::cout << "https://github.com/Tiny-Foxes/OpenSMO++\n";
+	std::cout << "\nServer:\n";
 	std::cout << ("Server Name: " + ServerName + "\n").c_str();
 	std::cout << ("Server (sm uses 128): " + std::to_string(ServerVersion) + "\n").c_str();
 	std::cout << ("Server Port: " + std::to_string(ServerPort) + "\n").c_str();
@@ -497,7 +500,7 @@ int main()
 		m_Mutex.unlock();
 
 
-		for (auto& Values : CurClients)
+		for (Clients& Values : CurClients)
 		{
 			auto& Client = Values.Client;
 			auto& LoggedIn = Values.LoggedIn;
@@ -659,7 +662,7 @@ int main()
 						continue;
 					}
 
-					for (auto& c : CurClients)
+					for (Clients& c : CurClients)
 					{
 						if (c.RoomID != RoomID)
 							continue;
@@ -695,7 +698,7 @@ int main()
 					std::string Grades;
 					std::string Combos;
 
-					for (auto& c : CurClients)
+					for (Clients& c : CurClients)
 					{
 						if (c.RoomID != RoomID)
 							continue;
@@ -711,7 +714,7 @@ int main()
 						Combos += std::string(1, first) + std::string(1, second);
 					}
 
-					for (auto& c : CurClients)
+					for (Clients& c : CurClients)
 					{
 						if (c.RoomID != RoomID)
 							continue;
@@ -736,7 +739,7 @@ int main()
 					if (result->NumPlayersWaiting == 0)
 					{
 						unsigned PlayerID = 0;
-						for (auto& c : CurClients)
+						for (Clients& c : CurClients)
 						{
 							if (c.RoomID != RoomID)
 								continue;
@@ -770,7 +773,7 @@ int main()
 						for (auto& Player : result->CurPlayers)
 							PlayerNums += std::string(1, static_cast<char>(pnum++));
 
-						for (auto& c : CurClients)
+						for (Clients& c : CurClients)
 						{
 							if (c.RoomID != RoomID)
 								continue;
@@ -806,7 +809,7 @@ int main()
 					std::string Taps;
 					int NumPlayers = 0;
 
-					for (auto& c : CurClients)
+					for (Clients& c : CurClients)
 					{
 						if (c.RoomID != RoomID)
 							continue;
