@@ -40,6 +40,9 @@ class Client {
   /// @return 
   ClientType GetType() const;
 
+ public:
+  std::vector<std::string> vInput;
+
  private:
   ASocket::Socket _socket;
   std::string _ip;

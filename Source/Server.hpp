@@ -3,6 +3,7 @@
 
 #include <mutex>
 #include <string>
+#include <thread>
 
 #include "TCPServer.h"
 
@@ -14,6 +15,14 @@ class Server {
   ~Server();
 
  public:
+  bool Start();
+  void Update(std::string ip, bool connecting);
+
+ private:
+  void SMOListener();
+
+ public:
+  bool IsRunning() const;
   unsigned int GetPort() const;
   unsigned int GetMaxPlayers() const;
   std::string GetName() const;
@@ -22,6 +31,7 @@ class Server {
   CTCPServer* GetConnection() const;
 
  private:
+  bool _running;
   unsigned int _port;
   unsigned int _maxPlayers;
   std::string _name;
@@ -29,7 +39,8 @@ class Server {
   std::string _password;
   std::string _serverDB;
   std::string _salt;
-  std::mutex _mutex;  
+  std::mutex _mutex;
+  std::thread* _mainThread;  
   Room _room;
   CTCPServer* _connection;
 };

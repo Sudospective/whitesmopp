@@ -32,13 +32,16 @@ class Room {
   /// @brief Get the password for administrator privileges.
   /// @return 
   std::string GetPassword() const;
+  void JoinPlayer(Client* player);
+  void RemovePlayer(Client* player);
+  std::vector<Client*> GetPlayers() const;
 
  private:
   Client* _owner;
   std::string _name;
   std::string _description;
   std::string _password;
-  std::vector<Client> _players;
+  std::vector<Client*> _players;
 };
 
 #endif // ROOM_HPP

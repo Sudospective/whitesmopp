@@ -1,7 +1,10 @@
+#include <chrono>
+
 #include "mini/ini.h"
 #include "SQLiteCpp/SQLiteCpp.h"
 
 #include "Server.hpp"
+#include "ServerManager.hpp"
 
 Server::Server() {
   mINI::INIFile file("Config.ini");
@@ -45,7 +48,14 @@ Server::Server() {
   SQLite::Transaction transaction(db);
   db.exec("CREATE TABLE IF NOT EXISTS Users(UserName CHAR, Password CHAR, Banned int)");
   transaction.commit();
+}
 
+Server::~Server() {
+  delete _connection;
+  delete _mainThread;
+}
+
+bool Server::Start() {
   std::string IP = "unknown";
   bool gotIP = false;
   std::mutex* mutex = &_mutex;
@@ -65,27 +75,63 @@ Server::Server() {
   };
 
   _connection = new CTCPServer(logPrinter, std::to_string(_port).c_str());
+  _mainThread = new std::thread(SMOListener);
+  while (true) {
+    Server::Update(IP, gotIP);
+    _mutex.lock();
+    gotIP = false;
+    _mutex.unlock();
+  }
 }
 
-Server::~Server() {
-  delete _connection;
+void Server::Update(std::string ip, bool connecting) {
+  _mutex.lock();
+  ServerManager::GetInstance()->currentIP = ip;
+  if (!ServerManager::GetInstance()->connecting)
+    ServerManager::GetInstance()->connecting = connecting;
+  std::vector<Client*> clients = _room.GetPlayers();
+  _mutex.unlock();
+
+  for (Client* client : clients) {
+    _mutex.lock();
+    Client* result = *std::find_if(clients.begin(), clients.end(), [&client](Client c) { return client->GetSocket() == c.GetSocket(); });
+    std::vector<std::string> vInput = result->vInput;
+    result->vInput.clear();
+    _mutex.unlock();
+    for (std::string input : vInput) {
+      switch (input[4]) {
+        case 3: { // Game Start
+          break;
+        }
+        case 4: { // Game End
+          break;
+        }
+      }
+    }
+  }
 }
 
-unsigned int Server::GetPort() const {
-  return _port;
+void Server::SMOListener() {
+  std::vector<std::thread> renderThreads;
+  while (_running) {
+    ASocket::Socket socket;
+    if (_connection->Listen(socket)) {
+      char input[1024] = {};
+      _connection->Receive(socket, input, 1024, false);
+      if (input[4] == 2) {
+        while (!ServerManager::GetInstance()->connecting)
+          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        _mutex.lock();
+        std::cout << std::string(input, input[6]+2).erase(0,6) + " '" + ServerManager::GetInstance()->currentIP + "'"+ " Connected with StepManiaOnline Protocol: V" + std::to_string(input[5]) << std::endl;
+      }
+    }
+  }
 }
-unsigned int Server::GetMaxPlayers() const {
-  return _maxPlayers;
-}
-std::string Server::GetName() const {
-  return _name;
-}
-std::string Server::GetIP() const {
-  return _ip;
-}
-const Room& Server::GetRoom() const {
-  return _room;
-}
-CTCPServer* Server::GetConnection() const {
-  return _connection;
-}
+
+bool Server::IsRunning() const { return _running; }
+unsigned int Server::GetPort() const { return _port; }
+unsigned int Server::GetMaxPlayers() const { return _maxPlayers; }
+std::string Server::GetName() const { return _name; }
+std::string Server::GetIP() const { return _ip; }
+const Room& Server::GetRoom() const { return _room; }
+CTCPServer* Server::GetConnection() const { return _connection; }
