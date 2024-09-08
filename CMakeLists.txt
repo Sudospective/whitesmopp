@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1.0)
 
-project(OpenSMO++)
+project(WhiteSMO++)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 

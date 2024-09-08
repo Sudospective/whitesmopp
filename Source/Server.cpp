@@ -1,7 +1,7 @@
 #include <chrono>
+#include <sstream>
 
 #include "mini/ini.h"
-#include "SQLiteCpp/SQLiteCpp.h"
 
 #include "Server.hpp"
 #include "ServerManager.hpp"
@@ -54,30 +54,33 @@ Server::Server() {
 
   file.write(ini);
 
-  SQLite::Database db(_serverDB.c_str(), SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
-  SQLite::Transaction transaction(db);
-  db.exec("CREATE TABLE IF NOT EXISTS Users(UserName CHAR, Password CHAR, Banned int)");
+  std::cout << "WhiteSMO++ 1.0" << std::endl;
+  std::cout << "written by Sudospective" << std::endl;
+  std::cout << "Original code by Jousway" << std::endl << std::endl;
+
+  _database = new SQLite::Database(_serverDB.c_str(), SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+  SQLite::Transaction transaction(*_database);
+  _database->exec("CREATE TABLE IF NOT EXISTS Users(UserName CHAR, Password CHAR, Banned int)");
   transaction.commit();
 }
 
 Server::~Server() {
   delete _connection;
   delete _mainThread;
+  delete _database;
 }
 
-bool Server::Start() {
-  std::string IP = "unknown";
-  bool gotIP = false;
-  std::mutex* mutex = &_mutex;
+void Server::Start() {
+  std::cout << "Starting server..." << std::endl;
 
-  auto logPrinter = [&IP, &gotIP, &mutex](const std::string& strLogMsg) {
+  auto logPrinter = [&](const std::string& strLogMsg) {
     if (strLogMsg.find("Incoming connection from") != std::string::npos) {
-      mutex->lock();
-      IP = strLogMsg;
-      IP.erase(0, IP.find_first_of('\'') + 1);
-      IP.erase(IP.find_first_of('\''), IP.length());
-      gotIP = true;
-      mutex->unlock();
+      _mutex.lock();
+      ServerManager::GetInstance().currentIP = strLogMsg;
+      ServerManager::GetInstance().currentIP.erase(0, ServerManager::GetInstance().currentIP.find_first_of('\'') + 1);
+      ServerManager::GetInstance().currentIP.erase(ServerManager::GetInstance().currentIP.find_first_of('\''), ServerManager::GetInstance().currentIP.length());
+      ServerManager::GetInstance().connecting = true;
+      _mutex.unlock();
     }
     else {
       //std::cout << strLogMsg << std::endl;
@@ -86,16 +89,17 @@ bool Server::Start() {
 
   _connection = new CTCPServer(logPrinter, std::to_string(_port).c_str());
   _mainThread = new std::thread([&]() { SMOListener(); });
+
+  std::cout << "Server started." << std::endl;
+
+  _running = true;
+
   while (true) {
-    Server::Update(IP, gotIP);
-    _mutex.lock();
-    gotIP = false;
-    _mutex.unlock();
+    Server::Update(ServerManager::GetInstance().currentIP, ServerManager::GetInstance().connecting);
   }
 
   _running = false;
   _mainThread->join();
-  return 0;
 }
 
 void Server::Update(std::string ip, bool connecting) {
@@ -147,14 +151,66 @@ void Server::Update(std::string ip, bool connecting) {
         case 11: { // PlayerOptions
           break;
         }
+        case 12: { // SMOnline
+          if (!client->loggedIn) {
+            std::stringstream in(input.erase(0, 8));
+            std::string val;
+            std::vector<std::string> vals;
+            while (std::getline(in, val, '\0')) {
+              vals.push_back(val);
+            }
+            vals.erase(std::remove(vals.begin() + 2, vals.end(), "\0"), vals.end());
+            bool foundUser = false;
+            try {
+              SQLite::Statement query(*_database, (std::string("SELECT * FROM Users WHERE UserName =") + "\"" + vals[0] + "\"").c_str());
+              bool invalidPass = false;
+              while (query.executeStep()) {
+                foundUser = true;
+                const char* name = query.getColumn(0);
+                client->SetName(name);
+                const char* password = query.getColumn(1);
+                int banned = query.getColumn(2);
+                if (banned == 1) {
+                  std::cout << "User: " << client->GetName() << " (" << client->GetIP() << ") Is Banned, Disconnecting\n";
+                  _connection->Disconnect(client->GetSocket());
+                  client->connected = false;
+                  invalidPass = true;
+                  break;
+                }
+                if (password != vals[1]) {
+                  std::string out = std::string(1, static_cast<char>(_protocolVersion + 12)) + std::string(1, '\0') + std::string(1, '\1') + "Wrong password.";
+                  std::string header = std::string(3, '\0') + std::string(1, static_cast<char>(out.size()));
+                  _connection->Send(client->GetSocket(), header + out);
+                  invalidPass = true;
+                  break;
+                }
+              }
+              if (invalidPass)
+                continue;
+            }
+            catch (...) {}
+            if (!foundUser) {
+              std::cout << "Creating new user: " << vals[0] << std::endl;
+              SQLite::Transaction transaction(*_database);
+              _database->exec(("INSERT INTO Users VALUES (\"" + vals[0] + "\", \"" + vals[1] + "\", 0)").c_str());
+              transaction.commit();
+              client->SetName(vals[0]);
+            }
+            std::string out = std::string(1, static_cast<char>(_protocolVersion + 12)) + std::string(2, '\0') + "Correct password.";
+            std::string header = std::string(3, '\0') + std::string(1, static_cast<char>(out.size()));
+            _connection->Send(client->GetSocket(), header + out);
+            client->loggedIn = true;
+          }
+          break;
+        }
       }
     }
   }
-  for (Client* client : _room.GetPlayers()) {
+  for (Client* client : clients) {
     _mutex.lock();
-    auto result = std::find_if(_room.GetPlayers().begin(), _room.GetPlayers().end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); });
+    auto result = std::find_if(clients.begin(), clients.end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); });
     Client* c = *result;
-    if (result != _room.GetPlayers().end()) {
+    if (result != clients.end()) {
       c->connected = client->connected;
       c->loggedIn = client->loggedIn;
       c->roomID = client->roomID;
@@ -184,6 +240,7 @@ void Server::DisconnectClient(Client* client) {
 }
 
 void Server::SMOListener() {
+  std::cout << "Listening on port " << _port << std::endl;
   std::vector<std::thread> readerThreads;
   while (_running) {
     ASocket::Socket socket;
@@ -195,18 +252,24 @@ void Server::SMOListener() {
           std::this_thread::sleep_for(std::chrono::milliseconds(50));
         
         _mutex.lock();
+
         std::cout << std::string(input, input[6]+2).erase(0,6) + " '" + ServerManager::GetInstance().currentIP + "'"+ " Connected with StepManiaOnline Protocol: V" + std::to_string(input[5]) << std::endl;
         std::string out = std::string(1, static_cast<char>(_protocolVersion + 2)) + std::string(1, static_cast<char>(_version)) + _name;
         std::string header = std::string(3, '\0') + std::string(1, static_cast<char>(out.size()));
+
         _connection->Send(socket, header + out);
+
         Client c;
         c.SetSocket(socket);
+        c.loggedIn = false;
         c.SetIP(ServerManager::GetInstance().currentIP);
+        c.roomID = 0;
         _room.GetPlayers().push_back(&c);
         readerThreads.push_back(std::thread([&](Client* client) { SMOReader(client); }, &c));
+        ServerManager::GetInstance().connecting = false;
+
         _mutex.unlock();
 
-        ServerManager::GetInstance().connecting = false;
       }
       else {
         _connection->Disconnect(socket);
@@ -219,23 +282,33 @@ void Server::SMOListener() {
 void Server::SMOReader(Client* client) {
   while (true) {
     _mutex.lock();
-    Client* result = *std::find_if(_room.GetPlayers().begin(), _room.GetPlayers().end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); });
-    Client c = *result;
+    auto search = std::find_if(_room.GetPlayers().begin(), _room.GetPlayers().end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); });
+    Client* result = nullptr;
+    if (search != _room.GetPlayers().end())
+      result = *search;
     _mutex.unlock();
+    if (result == nullptr)
+      continue;
 
-    if (c.connected) {
+    if (result->connected) {
       char input[1024] = {};
-      int read = _connection->Receive(c.GetSocket(), input, 1024, false);
+      int read = _connection->Receive(result->GetSocket(), input, 1024, false);
       if (read < 0)
         continue;
       
       _mutex.lock();
-      result = *std::find_if(_room.GetPlayers().begin(), _room.GetPlayers().end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); });
+      search = std::find_if(_room.GetPlayers().begin(), _room.GetPlayers().end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); });
+      if (search != _room.GetPlayers().end())
+        result = *search;
+      if (result == nullptr) {
+        _mutex.unlock();
+        continue;
+      }
       if (read == 0) {
-        std::cout << "User: " << c.GetName() << " (" << c.GetIP() << ") disconnected." << std::endl;
-        _connection->Disconnect(c.GetSocket());
+        std::cout << "User: " << result->GetName() << " (" << result->GetIP() << ") disconnected." << std::endl;
+        _connection->Disconnect(result->GetSocket());
         if (result->loggedIn) {
-          // leave player
+          DisconnectClient(result);
           // leave room
         }
         result->connected = false;
@@ -249,7 +322,6 @@ void Server::SMOReader(Client* client) {
     _mutex.lock();
     _room.GetPlayers().erase(std::remove_if(_room.GetPlayers().begin(), _room.GetPlayers().end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); }), _room.GetPlayers().end());
     _mutex.unlock();
-
     break;
   }
 }

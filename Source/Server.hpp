@@ -5,6 +5,7 @@
 #include <string>
 #include <thread>
 
+#include "SQLiteCpp/SQLiteCpp.h"
 #include "TCPServer.h"
 
 #include "Room.hpp"
@@ -15,7 +16,7 @@ class Server {
   ~Server();
 
  public:
-  bool Start();
+  void Start();
   void Update(std::string ip, bool connecting);
   void ConnectClient(Client* client);
   void DisconnectClient(Client* client);
@@ -45,9 +46,10 @@ class Server {
   std::string _serverDB;
   std::string _salt;
   std::mutex _mutex;
-  std::thread* _mainThread;  
+  std::thread* _mainThread;
   Room _room;
   CTCPServer* _connection;
+  SQLite::Database* _database;
 };
 
 #endif // SERVER_HPP
