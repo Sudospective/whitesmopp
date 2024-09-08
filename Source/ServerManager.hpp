@@ -5,13 +5,26 @@
 
 class ServerManager {
  public:
-  static ServerManager* GetInstance();
+  ServerManager(const ServerManager&) = delete;
+
+ public:
+  static ServerManager& GetInstance() {
+    if (_instance == nullptr)
+      _instance = new ServerManager;
+    return *_instance;
+  }
   bool connecting;
   std::string currentIP;
 
+ public:
+  ServerManager& operator=(const ServerManager&) = delete;
+
  private:
-  ServerManager();
-  static ServerManager* _instance;
+  ServerManager() {}
+  ~ServerManager() {}
+
+ private:
+  inline static ServerManager* _instance = nullptr;
 };
 
 #endif // SERVERMANAGER_HPP

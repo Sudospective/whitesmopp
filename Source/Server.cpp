@@ -16,6 +16,16 @@ Server::Server() {
     ini["Server"]["Name"] = "White Elephant 2024";
     _name = ini["Server"]["Name"];
   }
+  _version = atol(ini["Server"]["ServerVersion"].c_str());
+  if (_version <= 0) {
+    ini["Server"]["ServerVersion"] = "128";
+    _version = atol(ini["Server"]["ServerVersion"].c_str());
+  }
+  _protocolVersion = atol(ini["Server"]["ProtocolVersion"].c_str());
+  if (_protocolVersion <= 0) {
+    ini["Server"]["ProtocolVersion"] = "128";
+    _protocolVersion = atol(ini["Server"]["ProtocolVersion"].c_str());
+  }
   _port = atol(ini["Server"]["Port"].c_str());
   if (_port <= 0) {
     ini["Server"]["Port"] = "8765";
@@ -75,7 +85,7 @@ bool Server::Start() {
   };
 
   _connection = new CTCPServer(logPrinter, std::to_string(_port).c_str());
-  _mainThread = new std::thread(SMOListener);
+  _mainThread = new std::thread([&]() { SMOListener(); });
   while (true) {
     Server::Update(IP, gotIP);
     _mutex.lock();
@@ -86,24 +96,51 @@ bool Server::Start() {
 
 void Server::Update(std::string ip, bool connecting) {
   _mutex.lock();
-  ServerManager::GetInstance()->currentIP = ip;
-  if (!ServerManager::GetInstance()->connecting)
-    ServerManager::GetInstance()->connecting = connecting;
+  ServerManager::GetInstance().currentIP = ip;
+  if (!ServerManager::GetInstance().connecting)
+    ServerManager::GetInstance().connecting = connecting;
   std::vector<Client*> clients = _room.GetPlayers();
   _mutex.unlock();
 
   for (Client* client : clients) {
     _mutex.lock();
-    Client* result = *std::find_if(clients.begin(), clients.end(), [&client](Client c) { return client->GetSocket() == c.GetSocket(); });
+    Client* result = *std::find_if(clients.begin(), clients.end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); });
     std::vector<std::string> vInput = result->vInput;
     result->vInput.clear();
     _mutex.unlock();
     for (std::string input : vInput) {
       switch (input[4]) {
+        case 0: { // Ping
+          break;
+        }
+        case 1: { // Ping Response
+          break;
+        }
+        case 2: { // Hello(?)
+          break;
+        }
         case 3: { // Game Start
           break;
         }
         case 4: { // Game End
+          break;
+        }
+        case 5: { // Game Status Update
+          break;
+        }
+        case 6: { // Style Update
+          break;
+        }
+        case 7: { // Chat Message
+          break;
+        }
+        case 8: { // Request Start
+          break;
+        }
+        case 10: { // Music Select
+          break;
+        }
+        case 11: { // PlayerOptions
           break;
         }
       }
@@ -112,19 +149,73 @@ void Server::Update(std::string ip, bool connecting) {
 }
 
 void Server::SMOListener() {
-  std::vector<std::thread> renderThreads;
+  std::vector<std::thread> readerThreads;
   while (_running) {
     ASocket::Socket socket;
     if (_connection->Listen(socket)) {
       char input[1024] = {};
       _connection->Receive(socket, input, 1024, false);
       if (input[4] == 2) {
-        while (!ServerManager::GetInstance()->connecting)
+        while (!ServerManager::GetInstance().connecting)
           std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        
         _mutex.lock();
-        std::cout << std::string(input, input[6]+2).erase(0,6) + " '" + ServerManager::GetInstance()->currentIP + "'"+ " Connected with StepManiaOnline Protocol: V" + std::to_string(input[5]) << std::endl;
+        std::cout << std::string(input, input[6]+2).erase(0,6) + " '" + ServerManager::GetInstance().currentIP + "'"+ " Connected with StepManiaOnline Protocol: V" + std::to_string(input[5]) << std::endl;
+        std::string out = std::string(1, static_cast<char>(_protocolVersion + 2)) + std::string(1, static_cast<char>(_version)) + _name;
+        std::string header = std::string(3, '\0') + std::string(1, static_cast<char>(out.size()));
+        _connection->Send(socket, header + out);
+        Client c;
+        c.SetSocket(socket);
+        c.SetIP(ServerManager::GetInstance().currentIP);
+        _room.GetPlayers().push_back(&c);
+        readerThreads.push_back(std::thread([&](Client* client) { SMOReader(client); }, &c));
+        _mutex.unlock();
+
+        ServerManager::GetInstance().connecting = false;
+      }
+      else {
+        _connection->Disconnect(socket);
       }
     }
+  }
+  for (std::thread& thread : readerThreads)
+    thread.join();
+}
+void Server::SMOReader(Client* client) {
+  while (true) {
+    _mutex.lock();
+    Client* result = *std::find_if(_room.GetPlayers().begin(), _room.GetPlayers().end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); });
+    Client c = *result;
+    _mutex.unlock();
+
+    if (c.connected) {
+      char input[1024] = {};
+      int read = _connection->Receive(c.GetSocket(), input, 1024, false);
+      if (read < 0)
+        continue;
+      
+      _mutex.lock();
+      result = *std::find_if(_room.GetPlayers().begin(), _room.GetPlayers().end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); });
+      if (read == 0) {
+        std::cout << "User: " << c.GetName() << " (" << c.GetIP() << ") disconnected." << std::endl;
+        _connection->Disconnect(c.GetSocket());
+        if (result->loggedIn) {
+          // leave player
+          // leave room
+        }
+        result->connected = false;
+      }
+      if (read > 0) {
+        result->vInput.push_back(std::string(input, 1024));
+      }
+      _mutex.unlock();
+      continue;
+    }
+    _mutex.lock();
+    _room.GetPlayers().erase(std::remove_if(_room.GetPlayers().begin(), _room.GetPlayers().end(), [&client](Client* c) { return client->GetSocket() == c->GetSocket(); }), _room.GetPlayers().end());
+    _mutex.unlock();
+
+    break;
   }
 }
 

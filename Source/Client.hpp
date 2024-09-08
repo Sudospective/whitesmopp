@@ -13,12 +13,6 @@ enum class ClientType {
 
 class Client {
  public:
-  /// @brief Set the client socket.
-  /// @param socket 
-  void SetSocket(ASocket::Socket socket);
-  /// @brief Get the client socket.
-  /// @return 
-  ASocket::Socket GetSocket() const;
   /// @brief Set the client IP.
   /// @param ip 
   void SetIP(std::string ip);
@@ -31,6 +25,12 @@ class Client {
   /// @brief Get the client name.
   /// @return 
   std::string GetName() const;
+  /// @brief Set the client socket.
+  /// @param socket 
+  void SetSocket(ASocket::Socket socket);
+  /// @brief Get the client socket.
+  /// @return 
+  ASocket::Socket GetSocket() const;
   /// @brief Set the client type.
   ///        Client types are `Guest`, `User`, and `Admin`.
   /// @param type 
@@ -41,12 +41,14 @@ class Client {
   ClientType GetType() const;
 
  public:
+  bool connected;
+  bool loggedIn;
   std::vector<std::string> vInput;
 
  private:
-  ASocket::Socket _socket;
   std::string _ip;
   std::string _name;
+  ASocket::Socket _socket;
   ClientType _type;
 };
 

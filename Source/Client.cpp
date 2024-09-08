@@ -1,11 +1,5 @@
 #include "Client.hpp"
 
-void Client::SetSocket(ASocket::Socket socket) {
-  _socket = socket;
-}
-ASocket::Socket Client::GetSocket() const {
-  return _socket;
-}
 void Client::SetIP(std::string ip) {
   _ip = ip;
 }
@@ -17,6 +11,12 @@ void Client::SetName(std::string name) {
 }
 std::string Client::GetName() const {
   return _name;
+}
+void Client::SetSocket(ASocket::Socket socket) {
+  _socket = socket;
+}
+ASocket::Socket Client::GetSocket() const {
+  return _socket;
 }
 void Client::SetType(ClientType type) {
   _type = type;

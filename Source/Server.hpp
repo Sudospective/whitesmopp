@@ -20,6 +20,7 @@ class Server {
 
  private:
   void SMOListener();
+  void SMOReader(Client* client);
 
  public:
   bool IsRunning() const;
@@ -34,6 +35,8 @@ class Server {
   bool _running;
   unsigned int _port;
   unsigned int _maxPlayers;
+  unsigned int _version;
+  unsigned int _protocolVersion;
   std::string _name;
   std::string _ip;
   std::string _password;
