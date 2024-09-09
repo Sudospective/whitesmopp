@@ -166,8 +166,6 @@ void Server::Update() {
           player->name = vals[0];
           player->ID = vals[1];
 
-          std::cout << player->name << " (" << player->ID << ")" << std::endl;
-
           break;
         }
       }
