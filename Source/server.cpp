@@ -5,7 +5,6 @@
 #include <sstream>
 
 #include "server-manager.hpp"
-#include "game-manager.hpp"
 
 Server::Server() {
   _tcp = nullptr;
@@ -140,34 +139,75 @@ void Server::Update() {
     std::vector<std::string> inputs = player->inputs;
     player->inputs.clear();
     _mutex.unlock();
-    for (std::string input : inputs) {
-      switch (input[4]) {
-        case 6: {
-          continue;
-        }
-        case 7: {
-          if (input[5] == '/') {
-            std::string cmd = input;
-            cmd.erase(0, 6);
-            std::string arg;
-          }
-          break;
-        }
-        case 12: {
-          std::stringstream in(input.erase(0, 8));
-          std::string val;
-          std::vector<std::string> vals;
+    Read(player, inputs);
+  }
+}
 
-          while (std::getline(in, val, '\0')) {
-            vals.push_back(val);
-          }
+void Server::Read(Client* player, std::vector<std::string> inputs) {
+  for (std::string input : inputs) {
+    switch (input[4]) {
+      case 0: { // Ping
+        break;
+      }
+      case 1: { // Ping Response
+        break;
+      }
+      case 2: { // Hello
+        break;
+      }
+      case 3: { // Game Start
+        break;
+      }
+      case 4: { // Game End
+        break;
+      }
+      case 5: { // Game Status Update
+        break;
+      }
+      case 6: { // Style Update
+        break;
+      }
+      case 7: { // Chat
+        break;
+      }
+      case 8: { // Request Start
+        break;
+      }
+      case 9: { // Reserved
+        break;
+      }
+      case 10: { // Music Select
+        break;
+      }
+      case 11: { // Player Options
+        break;
+      }
+      case 12: { // StepManiaOnline
+        std::stringstream in(input.erase(0, 8));
+        std::string val;
+        std::vector<std::string> vals;
 
-          vals.erase(std::remove(vals.begin() + 2, vals.end(), "\0"), vals.end());
-          player->name = vals[0];
-          player->ID = vals[1];
-
-          break;
+        while (std::getline(in, val, '\0')) {
+          vals.push_back(val);
         }
+
+        vals.erase(std::remove(vals.begin() + 2, vals.end(), "\0"), vals.end());
+        player->name = vals[0];
+        player->ID = vals[1];
+
+        break;
+      }
+      case 13: { // Reserved
+        break;
+      }
+      case 14: { // Reserved
+        break;
+      }
+      case 15: { // Reserved
+        break;
+      }
+      case 16: { // Friend List Update
+        break;
       }
     }
   }

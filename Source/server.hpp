@@ -26,6 +26,7 @@ class Server {
  public:
   void Start();
   void Update();
+  void Read(Client* player, std::vector<std::string> inputs);
   void Stop();
 
  public:
