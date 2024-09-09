@@ -24,6 +24,7 @@ class Server {
 
  public:
   void Start();
+  void Update();
   void Stop();
 
  public:

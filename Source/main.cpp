@@ -2,7 +2,11 @@
 
 int main() {
   Server server;
-  server.Start();
 
+  server.Start();
+  while (server.IsRunning()) {
+    server.Update();
+  }
+  
   return 0;
 }

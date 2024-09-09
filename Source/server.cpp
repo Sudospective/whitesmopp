@@ -52,7 +52,7 @@ void Server::Start() {
 
   // th antilambda
   std::function reader = [&](Client* player) {
-    while (true) {
+    while (_running) {
       if (player->connected) {
         char input[1024] = {};
         int read = _tcp->Receive(*(player->socket), input, 1024, false);
@@ -81,7 +81,8 @@ void Server::Start() {
     }
   };
 
-  _thread = new std::thread([&]() {
+  // th omnilambda
+  std::function listener = [&]() {
     std::vector<std::thread> threads;
     while (_running) {
       ASocket::Socket socket;
@@ -97,7 +98,7 @@ void Server::Start() {
           Client c;
           c.socket = &socket;
           c.IP = ServerManager::GetInstance()->connectingIP;
-          c.connected = true;
+          c.connected = ServerManager::GetInstance()->isConnecting;
           std::cout << "New player from IP address " << c.IP << std::endl;
           
           std::string out = (
@@ -125,30 +126,26 @@ void Server::Start() {
     }
     for (std::thread& thread : threads)
       thread.join();
-  });
+  };
+
+  _thread = new std::thread(listener);
 
   _thread->join();
+}
 
-  while (true) {
+void Server::Update() {
+  _mutex.lock();
+  ServerManager::GetInstance()->isConnecting = false;
+  _mutex.unlock();
+  for (Client* player : _players) {
     _mutex.lock();
-    ServerManager::GetInstance()->isConnecting = false;
+    std::vector<std::string> inputs = player->inputs;
+    player->inputs.clear();
     _mutex.unlock();
-    for (Client* player : _players) {
-      _mutex.lock();
-      std::vector<std::string> inputs = player->inputs;
-      player->inputs.clear();
-      _mutex.unlock();
 
-      for (std::string input : inputs) {
-        switch (input[4]) {
-          case 6: {
-            break;
-          }
-          case 7: {
-            break;
-          }
-        }
-      }
+    for (std::string input : inputs) {
+      // switch (input[4])
+      std::cout << player->IP << ": " << input[4] << std::endl;
     }
   }
 }
