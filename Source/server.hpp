@@ -11,9 +11,10 @@
 struct Client {
   bool connected;
   std::string name;
+  std::string ID;
   std::string IP;
   std::string gift;
-  ASocket::Socket* socket;
+  ASocket::Socket socket;
   std::vector<std::string> inputs;
 };
 

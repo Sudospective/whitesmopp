@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <iostream>
+#include <sstream>
 
 #include "server-manager.hpp"
 #include "game-manager.hpp"
@@ -55,13 +56,13 @@ void Server::Start() {
     while (_running) {
       if (player->connected) {
         char input[1024] = {};
-        int read = _tcp->Receive(*(player->socket), input, 1024, false);
+        int read = _tcp->Receive(player->socket, input, 1024, false);
         if (read < 0)
           continue;
         _mutex.lock();
         if (read == 0) {
           std::cout << "User " << player->name << " (" << player->IP << ") disconnected." << std::endl;
-          _tcp->Disconnect(*(player->socket));
+          _tcp->Disconnect(player->socket);
           player->connected = false;
         }
         if (read > 0) {
@@ -92,15 +93,12 @@ void Server::Start() {
         if (input[4] == 2) {
           while (!ServerManager::GetInstance()->isConnecting)
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
-          
           _mutex.lock();
-          
           Client c;
-          c.socket = &socket;
+          c.socket = socket;
           c.IP = ServerManager::GetInstance()->connectingIP;
-          c.connected = ServerManager::GetInstance()->isConnecting;
+          c.connected = true;
           std::cout << "New player from IP address " << c.IP << std::endl;
-          
           std::string out = (
             std::string(1, static_cast<char>(_serverOffset + 2)) +
             std::string(1, static_cast<char>(_serverVersion)) +
@@ -111,12 +109,9 @@ void Server::Start() {
             std::string(1, static_cast<char>(out.size()))
           );
           _tcp->Send(socket, header + out);
-
           _players.push_back(&c);
           threads.push_back(std::thread(reader, &c));
-
           ServerManager::GetInstance()->isConnecting = false;
-
           _mutex.unlock();
         }
         else {
@@ -130,6 +125,9 @@ void Server::Start() {
 
   _thread = new std::thread(listener);
 
+  while (_running)
+    Update();
+
   _thread->join();
 }
 
@@ -142,10 +140,37 @@ void Server::Update() {
     std::vector<std::string> inputs = player->inputs;
     player->inputs.clear();
     _mutex.unlock();
-
     for (std::string input : inputs) {
-      // switch (input[4])
-      std::cout << player->IP << ": " << input[4] << std::endl;
+      switch (input[4]) {
+        case 6: {
+          continue;
+        }
+        case 7: {
+          if (input[5] == '/') {
+            std::string cmd = input;
+            cmd.erase(0, 6);
+            std::string arg;
+          }
+          break;
+        }
+        case 12: {
+          std::stringstream in(input.erase(0, 8));
+          std::string val;
+          std::vector<std::string> vals;
+
+          while (std::getline(in, val, '\0')) {
+            vals.push_back(val);
+          }
+
+          vals.erase(std::remove(vals.begin() + 2, vals.end(), "\0"), vals.end());
+          player->name = vals[0];
+          player->ID = vals[1];
+
+          std::cout << player->name << " (" << player->ID << ")" << std::endl;
+
+          break;
+        }
+      }
     }
   }
 }
