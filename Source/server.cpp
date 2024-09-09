@@ -50,7 +50,39 @@ void Server::Start() {
 
   std::cout << "Server started." << std::endl;
 
+  // th antilambda
+  std::function reader = [&](Client* player) {
+    while (true) {
+      if (player->connected) {
+        char input[1024] = {};
+        int read = _tcp->Receive(*(player->socket), input, 1024, false);
+        if (read < 0)
+          continue;
+        _mutex.lock();
+        if (read == 0) {
+          std::cout << "User " << player->name << " (" << player->IP << ") disconnected." << std::endl;
+          _tcp->Disconnect(*(player->socket));
+          player->connected = false;
+        }
+        if (read > 0) {
+          player->inputs.push_back(std::string(input, 1024));
+        }
+        _mutex.unlock();
+        continue;
+      }
+      _mutex.lock();
+      _players.erase(std::remove_if(
+        _players.begin(),
+        _players.end(),
+        [&](Client* c) { return player->socket == c->socket; }
+      ), _players.end());
+      _mutex.unlock();
+      break;
+    }
+  };
+
   _thread = new std::thread([&]() {
+    std::vector<std::thread> threads;
     while (_running) {
       ASocket::Socket socket;
       if (_tcp->Listen(socket)) {
@@ -65,6 +97,7 @@ void Server::Start() {
           Client c;
           c.socket = &socket;
           c.IP = ServerManager::GetInstance()->connectingIP;
+          c.connected = true;
           std::cout << "New player from IP address " << c.IP << std::endl;
           
           std::string out = (
@@ -79,6 +112,7 @@ void Server::Start() {
           _tcp->Send(socket, header + out);
 
           _players.push_back(&c);
+          threads.push_back(std::thread(reader, &c));
 
           ServerManager::GetInstance()->isConnecting = false;
 
@@ -89,9 +123,34 @@ void Server::Start() {
         }
       }
     }
+    for (std::thread& thread : threads)
+      thread.join();
   });
 
   _thread->join();
+
+  while (true) {
+    _mutex.lock();
+    ServerManager::GetInstance()->isConnecting = false;
+    _mutex.unlock();
+    for (Client* player : _players) {
+      _mutex.lock();
+      std::vector<std::string> inputs = player->inputs;
+      player->inputs.clear();
+      _mutex.unlock();
+
+      for (std::string input : inputs) {
+        switch (input[4]) {
+          case 6: {
+            break;
+          }
+          case 7: {
+            break;
+          }
+        }
+      }
+    }
+  }
 }
 
 void Server::Stop() {

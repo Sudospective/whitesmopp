@@ -9,10 +9,12 @@
 #include "TCPServer.h"
 
 struct Client {
+  bool connected;
   std::string name;
   std::string IP;
   std::string gift;
   ASocket::Socket* socket;
+  std::vector<std::string> inputs;
 };
 
 class Server {
@@ -34,13 +36,12 @@ class Server {
  private:
   bool _running;
   std::mutex _mutex;
-  unsigned int _serverOffset;
-  unsigned int _serverVersion;
   std::thread* _thread;
   std::vector<Client*> _players;
   CTCPServer* _tcp;
-  Client* _owner;
 
+  const unsigned int _serverOffset = 128;
+  const unsigned int _serverVersion = 128;
   const unsigned int _port = 8765;
   const std::string _name = "White Elephant 2024";
 };
