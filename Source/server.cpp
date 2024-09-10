@@ -214,21 +214,19 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
             if (result != _room.players.end())
               _room.players.erase(result);
 
-            for (Client* plr : _room.players) {
+            for (Client* plr : _room.players)
               SendChat(plr, "User left: " + player->name);
-            }
 
             break;
           }
           case 1: { // SelectMusic Enter
             std::cout << player->name << " entered ScreenNetSelectMusic" << std::endl;
 
-            for (Client* plr : _room.players) {
-              if (plr->ID != player->ID)
-                SendChat(plr, "User joined: " + player->name);
-            }
+            for (Client* plr : _room.players)
+              SendChat(plr, "User joined: " + player->name);
 
             _room.players.push_back(player);
+            player->inRoom = true;
 
             ListPlayers(player, _room.players);
             break;
@@ -264,9 +262,9 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
               );
               if (result != _room.players.end()) {
                 _room.players.erase(result);
+                player->inRoom = false;
                 break;
               }
-              player->inRoom = false;
             }
             else {
               std::string names, states, flags;
@@ -290,8 +288,6 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
                 std::string(1, static_cast<char>(out.size()))
               );
               _tcp->Send(player->socket, header + out);
-
-              player->inRoom = true;
             }
 
             break;
@@ -346,6 +342,7 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
               break;
             }
             case 2: { // Create Room
+              SendChat(player, "You may not create a room. Please press &BACK;, followed by &START;.");
               break;
             }
           }
