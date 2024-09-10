@@ -150,10 +150,13 @@ void Server::ListPlayers(Client* player, std::vector<Client*> allPlayers) {
   std::string users;
   for (Client* plr : allPlayers)
     users += std::string(1, '\n') + plr->name;
+  SendChat(player, "Player list:" + users);
+}
 
+void Server::SendChat(Client* player, std::string msg) {
   std::string out = (
     std::string(1, static_cast<char>(_serverOffset + 7)) +
-    std::string(12, '\n') + "Player list:" + users
+    msg
   );
   std::string header = (
     std::string(3, '\0') +
@@ -172,7 +175,7 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
       case 1: { // Ping Response
         break;
       }
-      case 2: { // Hello (not needed here)
+      case 2: { // Hello
         break;
       }
       case 3: { // Game Start
@@ -192,6 +195,7 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
         break;
       }
       case 8: { // Request Start
+        std::cout << input << std::endl;
         break;
       }
       case 9: { // Reserved
@@ -201,12 +205,32 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
         switch(input[5]) {
           case 0: { // SelectMusic Exit
             std::cout << player->name << " exited ScreenNetSelectMusic" << std::endl;
+
+            auto result = std::find_if(
+              _room.players.begin(),
+              _room.players.end(),
+              [&player](Client* c) { return player->ID == c->ID; }
+            );
+            if (result != _room.players.end())
+              _room.players.erase(result);
+
+            for (Client* plr : _room.players) {
+              SendChat(plr, "User left: " + player->name);
+            }
+
             break;
           }
           case 1: { // SelectMusic Enter
             std::cout << player->name << " entered ScreenNetSelectMusic" << std::endl;
-            for (Client* plr : _room.players)
-              ListPlayers(plr, _room.players);
+
+            for (Client* plr : _room.players) {
+              if (plr->ID != player->ID)
+                SendChat(plr, "User joined: " + player->name);
+            }
+
+            _room.players.push_back(player);
+
+            ListPlayers(player, _room.players);
             break;
           }
           case 2: { // Not Sent
@@ -232,39 +256,44 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
           case 7: { // Room Enter
             std::cout << player->name << " entered ScreenNetRoom" << std::endl;
 
-            auto result = std::find_if(
-              _room.players.begin(),
-              _room.players.end(),
-              [&player](Client* c) { return player->ID == c->ID; }
-            );
-            if (result != _room.players.end()) {
-              _room.players.erase(result);
-              break;
+            if (player->inRoom) {
+              auto result = std::find_if(
+                _room.players.begin(),
+                _room.players.end(),
+                [&player](Client* c) { return player->ID == c->ID; }
+              );
+              if (result != _room.players.end()) {
+                _room.players.erase(result);
+                break;
+              }
+              player->inRoom = false;
+            }
+            else {
+              std::string names, states, flags;
+
+              names += _room.name + std::string(1, '\0') + _room.description + std::string(1, '\0');
+              states += std::string(1, static_cast<char>(_room.state));
+              flags += std::string(1, '\0'); // no password
+              
+              std::string out = (
+                std::string(1, static_cast<char>(_serverOffset + 12)) +
+                std::string(1, '\1') +
+                std::string(1, '\0') +
+                _room.name + std::string(1, '\0') +
+                _room.description + std::string(1, '\0') +
+                std::string(1, '\1') +
+                std::string(1, static_cast<char>(1)) +
+                names + states + flags
+              );
+              std::string header = (
+                std::string(3, '\0') +
+                std::string(1, static_cast<char>(out.size()))
+              );
+              _tcp->Send(player->socket, header + out);
+
+              player->inRoom = true;
             }
 
-            _room.players.push_back(player);
-
-            std::string names, states, flags;
-
-            names += _room.name + std::string(1, '\0') + _room.description + std::string(1, '\0');
-            states += std::string(1, static_cast<char>(_room.state));
-            flags += std::string(1, '\0'); // no password
-            
-            std::string out = (
-              std::string(1, static_cast<char>(_serverOffset + 12)) +
-              std::string(1, '\1') +
-              std::string(1, '\0') +
-              _room.name + std::string(1, '\0') +
-              _room.description + std::string(1, '\0') +
-              std::string(1, '\1') +
-              std::string(1, static_cast<char>(1)) +
-              names + states + flags
-            );
-            std::string header = (
-              std::string(3, '\0') +
-              std::string(1, static_cast<char>(out.size()))
-            );
-            _tcp->Send(player->socket, header + out);
             break;
           }
         }
@@ -332,9 +361,6 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
       }
       case 15: { // XML Packet
         std::cout << "congrats you are win!" << std::endl;
-        break;
-      }
-      case 16: { // Friend List Update
         break;
       }
     }

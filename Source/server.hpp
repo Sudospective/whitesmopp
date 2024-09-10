@@ -11,6 +11,7 @@
 struct Client {
   bool connected = false;
   bool loggedIn = false;
+  bool inRoom = false;
   std::string name;
   std::string ID;
   std::string IP;
@@ -36,6 +37,7 @@ class Server {
   void Start();
   void Update();
   void ListPlayers(Client* player, std::vector<Client*> allPlayers);
+  void SendChat(Client* player, std::string msg);
   void Read(Client* player, std::vector<std::string> inputs);
   void Stop();
 
