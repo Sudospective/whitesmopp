@@ -2,7 +2,6 @@ add_subdirectory(Libs)
 
 set(Source
 	main.cpp
-	game-manager.cpp
 	server.cpp
 	server-manager.cpp
 )

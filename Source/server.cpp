@@ -50,6 +50,9 @@ void Server::Start() {
 
   std::cout << "Server started." << std::endl;
 
+  _room.name = "White Elephant 2024";
+  _room.description = "Merry Christmas!";
+
   // th antilambda
   std::function reader = [&](Client* player) {
     while (_running) {
@@ -143,8 +146,25 @@ void Server::Update() {
   }
 }
 
+void Server::ListPlayers(Client* player, std::vector<Client*> allPlayers) {
+  std::string users;
+  for (Client* plr : allPlayers)
+    users += std::string(1, '\n') + plr->name;
+
+  std::string out = (
+    std::string(1, static_cast<char>(_serverOffset + 7)) +
+    std::string(12, '\n') + "Player list:" + users
+  );
+  std::string header = (
+    std::string(3, '\0') +
+    std::string(1, static_cast<char>(out.size()))
+  );
+  _tcp->Send(player->socket, header + out);
+}
+
 void Server::Read(Client* player, std::vector<std::string> inputs) {
   for (std::string input : inputs) {
+    std::cout << player->IP << " sent message on protocol " << static_cast<int>(input[4]) << std::endl;
     switch (input[4]) {
       case 0: { // Ping
         break;
@@ -152,7 +172,7 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
       case 1: { // Ping Response
         break;
       }
-      case 2: { // Hello
+      case 2: { // Hello (not needed here)
         break;
       }
       case 3: { // Game Start
@@ -168,6 +188,7 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
         break;
       }
       case 7: { // Chat
+        std::cout << input.erase(0, 5).erase(input.find_first_of('\0')) << std::endl;
         break;
       }
       case 8: { // Request Start
@@ -176,34 +197,141 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
       case 9: { // Reserved
         break;
       }
-      case 10: { // Music Select
+      case 10: { // User Status
+        switch(input[5]) {
+          case 0: { // SelectMusic Exit
+            std::cout << player->name << " exited ScreenNetSelectMusic" << std::endl;
+            break;
+          }
+          case 1: { // SelectMusic Enter
+            std::cout << player->name << " entered ScreenNetSelectMusic" << std::endl;
+            for (Client* plr : _room.players)
+              ListPlayers(plr, _room.players);
+            break;
+          }
+          case 2: { // Not Sent
+            std::cout << player->name << " did a thing???????" << std::endl;
+            break;
+          }
+          case 3: { // PlayerOptions Enter
+            std::cout << player->name << " entered ScreenPlayerOptions" << std::endl;
+            break;
+          }
+          case 4: { // Evaluation Exit
+            std::cout << player->name << " exited ScreenNetEvaluation" << std::endl;
+            break;
+          }
+          case 5: { // Evaluation Enter
+            std::cout << player->name << " entered ScreenNetEvaluation" << std::endl;
+            break;
+          }
+          case 6: { // Room Exit
+            std::cout << player->name << " exited ScreenNetRoom" << std::endl;
+            break;
+          }
+          case 7: { // Room Enter
+            std::cout << player->name << " entered ScreenNetRoom" << std::endl;
+
+            auto result = std::find_if(
+              _room.players.begin(),
+              _room.players.end(),
+              [&player](Client* c) { return player->ID == c->ID; }
+            );
+            if (result != _room.players.end()) {
+              _room.players.erase(result);
+              break;
+            }
+
+            _room.players.push_back(player);
+
+            std::string names, states, flags;
+
+            names += _room.name + std::string(1, '\0') + _room.description + std::string(1, '\0');
+            states += std::string(1, static_cast<char>(_room.state));
+            flags += std::string(1, '\0'); // no password
+            
+            std::string out = (
+              std::string(1, static_cast<char>(_serverOffset + 12)) +
+              std::string(1, '\1') +
+              std::string(1, '\0') +
+              _room.name + std::string(1, '\0') +
+              _room.description + std::string(1, '\0') +
+              std::string(1, '\1') +
+              std::string(1, static_cast<char>(1)) +
+              names + states + flags
+            );
+            std::string header = (
+              std::string(3, '\0') +
+              std::string(1, static_cast<char>(out.size()))
+            );
+            _tcp->Send(player->socket, header + out);
+            break;
+          }
+        }
         break;
       }
       case 11: { // Player Options
+        switch (input[5]) {
+          case 0: { // Initialize
+            break;
+          }
+        }
         break;
       }
-      case 12: { // StepManiaOnline
-        std::stringstream in(input.erase(0, 8));
-        std::string val;
-        std::vector<std::string> vals;
+      case 12: { // SMOnline Packet
+        if (!player->loggedIn) {
+          std::stringstream in(input.erase(0, 8));
+          std::string val;
+          std::vector<std::string> vals;
 
-        while (std::getline(in, val, '\0')) {
-          vals.push_back(val);
+          while (std::getline(in, val, '\0')) {
+            vals.push_back(val);
+          }
+
+          vals.erase(std::remove(vals.begin() + 2, vals.end(), "\0"), vals.end());
+          player->name = vals[0];
+          player->ID = vals[1];
+
+          std::cout << "User signed in as " << player->name << std::endl;
+
+          std::string out = (
+            std::string(1, static_cast<char>(_serverOffset + 12)) +
+            std::string(2, '\0') +
+            "Success"
+          );
+          std::string header = (
+            std::string(3, '\0') +
+            std::string(1, static_cast<char>(out.size()))
+          );
+          _tcp->Send(player->socket, header + out);
+
+          player->loggedIn = true;
         }
-
-        vals.erase(std::remove(vals.begin() + 2, vals.end(), "\0"), vals.end());
-        player->name = vals[0];
-        player->ID = vals[1];
+        else {
+          std::cout << static_cast<int>(input[5]) << std::endl;
+          switch (input[5]) {
+            case 0: {
+              break;
+            }
+            case 1: {
+              break;
+            }
+            case 2: { // Create Room
+              break;
+            }
+          }
+        }
 
         break;
       }
       case 13: { // Reserved
         break;
       }
-      case 14: { // Reserved
+      case 14: { // Send Attack
         break;
       }
-      case 15: { // Reserved
+      case 15: { // XML Packet
+        std::cout << "congrats you are win!" << std::endl;
         break;
       }
       case 16: { // Friend List Update
@@ -221,4 +349,5 @@ bool Server::IsRunning() const { return _running; }
 std::string Server::GetName() const { return _name; }
 unsigned int Server::GetPort() const { return _port; }
 std::vector<Client*> Server::GetPlayers() const { return _players; }
+Room Server::GetRoom() const { return _room; }
 CTCPServer* Server::GetConnection() const { return _tcp; }

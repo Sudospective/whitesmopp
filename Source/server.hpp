@@ -9,13 +9,22 @@
 #include "TCPServer.h"
 
 struct Client {
-  bool connected;
+  bool connected = false;
+  bool loggedIn = false;
   std::string name;
   std::string ID;
   std::string IP;
   std::string gift;
-  ASocket::Socket socket;
   std::vector<std::string> inputs;
+  ASocket::Socket socket;
+};
+
+struct Room {
+  int state;
+  std::string name;
+  std::string description;
+  std::string password;
+  std::vector<Client*> players;
 };
 
 class Server {
@@ -26,14 +35,17 @@ class Server {
  public:
   void Start();
   void Update();
+  void ListPlayers(Client* player, std::vector<Client*> allPlayers);
   void Read(Client* player, std::vector<std::string> inputs);
   void Stop();
 
+ // just in case
  public:
   bool IsRunning() const;
   unsigned int GetPort() const;
   std::string GetName() const;
   std::vector<Client*> GetPlayers() const;
+  Room GetRoom() const;
   CTCPServer* GetConnection() const;
 
  private:
@@ -41,6 +53,7 @@ class Server {
   std::mutex _mutex;
   std::thread* _thread;
   std::vector<Client*> _players;
+  Room _room;
   CTCPServer* _tcp;
 
   const unsigned int _serverOffset = 128;
