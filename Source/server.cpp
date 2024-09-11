@@ -4,6 +4,8 @@
 #include <iostream>
 #include <sstream>
 
+#include <nlohmann/json.hpp>
+
 #include "server-manager.hpp"
 
 Server::Server() {
@@ -92,7 +94,10 @@ void Server::Start() {
       if (_tcp->Listen(socket)) {
         char input[1024] = {};
         _tcp->Receive(socket, input, 1024, false);
-        if (input[4] == 2) {
+        std::string inputStr = std::string(input, 1024);
+        inputStr = inputStr.erase(inputStr.find_first_of('\0'));
+        nlohmann::json jRecv = nlohmann::json::parse(inputStr);
+        if (jRecv["command"] == 2) {
           while (!ServerManager::GetInstance()->isConnecting)
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
           _mutex.lock();
@@ -101,24 +106,18 @@ void Server::Start() {
           c.IP = ServerManager::GetInstance()->connectingIP;
           c.connected = true;
           std::cout << "New player from IP address " << c.IP << std::endl;
-          std::string out = (
-            std::string(1, static_cast<char>(_serverOffset + 2)) +
-            std::string(1, static_cast<char>(_serverVersion)) +
-            _name
-          );
-          std::string header = (
-            std::string(3, '\0') +
-            std::string(1, static_cast<char>(out.size()))
-          );
-          _tcp->Send(socket, header + out);
+          nlohmann::json jSend;
+          jSend["command"] = _serverOffset + 2;
+          jSend["offset"] = _serverOffset;
+          jSend["message"] = "Hello";
+          _tcp->Send(socket, jSend.dump());
           _players.push_back(&c);
           threads.push_back(std::thread(reader, &c));
           ServerManager::GetInstance()->isConnecting = false;
           _mutex.unlock();
         }
-        else {
+        else
           _tcp->Disconnect(socket);
-        }
       }
     }
     for (std::thread& thread : threads)
@@ -134,9 +133,9 @@ void Server::Start() {
 }
 
 void Server::Update() {
-  _mutex.lock();
-  ServerManager::GetInstance()->isConnecting = false;
-  _mutex.unlock();
+  //_mutex.lock();
+  //ServerManager::GetInstance()->isConnecting = false;
+  //_mutex.unlock();
   for (Client* player : _players) {
     _mutex.lock();
     std::vector<std::string> inputs = player->inputs;
@@ -191,163 +190,21 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
         break;
       }
       case 7: { // Chat
-        std::cout << input.erase(0, 5).erase(input.find_first_of('\0')) << std::endl;
         break;
       }
       case 8: { // Request Start
-        std::cout << input << std::endl;
         break;
       }
-      case 9: { // Reserved
+      case 9: { // White Elephant
         break;
       }
       case 10: { // User Status
-        switch(input[5]) {
-          case 0: { // SelectMusic Exit
-            std::cout << player->name << " exited ScreenNetSelectMusic" << std::endl;
-
-            auto result = std::find_if(
-              _room.players.begin(),
-              _room.players.end(),
-              [&player](Client* c) { return player->ID == c->ID; }
-            );
-            if (result != _room.players.end())
-              _room.players.erase(result);
-
-            for (Client* plr : _room.players)
-              SendChat(plr, "User left: " + player->name);
-
-            break;
-          }
-          case 1: { // SelectMusic Enter
-            std::cout << player->name << " entered ScreenNetSelectMusic" << std::endl;
-
-            for (Client* plr : _room.players)
-              SendChat(plr, "User joined: " + player->name);
-
-            _room.players.push_back(player);
-            player->inRoom = true;
-
-            ListPlayers(player, _room.players);
-            break;
-          }
-          case 2: { // Not Sent
-            std::cout << player->name << " did a thing???????" << std::endl;
-            break;
-          }
-          case 3: { // PlayerOptions Enter
-            std::cout << player->name << " entered ScreenPlayerOptions" << std::endl;
-            break;
-          }
-          case 4: { // Evaluation Exit
-            std::cout << player->name << " exited ScreenNetEvaluation" << std::endl;
-            break;
-          }
-          case 5: { // Evaluation Enter
-            std::cout << player->name << " entered ScreenNetEvaluation" << std::endl;
-            break;
-          }
-          case 6: { // Room Exit
-            std::cout << player->name << " exited ScreenNetRoom" << std::endl;
-            break;
-          }
-          case 7: { // Room Enter
-            std::cout << player->name << " entered ScreenNetRoom" << std::endl;
-
-            if (player->inRoom) {
-              auto result = std::find_if(
-                _room.players.begin(),
-                _room.players.end(),
-                [&player](Client* c) { return player->ID == c->ID; }
-              );
-              if (result != _room.players.end()) {
-                _room.players.erase(result);
-                player->inRoom = false;
-                break;
-              }
-            }
-            else {
-              std::string names, states, flags;
-
-              names += _room.name + std::string(1, '\0') + _room.description + std::string(1, '\0');
-              states += std::string(1, static_cast<char>(_room.state));
-              flags += std::string(1, '\0'); // no password
-              
-              std::string out = (
-                std::string(1, static_cast<char>(_serverOffset + 12)) +
-                std::string(1, '\1') +
-                std::string(1, '\0') +
-                _room.name + std::string(1, '\0') +
-                _room.description + std::string(1, '\0') +
-                std::string(1, '\1') +
-                std::string(1, static_cast<char>(1)) +
-                names + states + flags
-              );
-              std::string header = (
-                std::string(3, '\0') +
-                std::string(1, static_cast<char>(out.size()))
-              );
-              _tcp->Send(player->socket, header + out);
-            }
-
-            break;
-          }
-        }
         break;
       }
       case 11: { // Player Options
-        switch (input[5]) {
-          case 0: { // Initialize
-            break;
-          }
-        }
         break;
       }
       case 12: { // SMOnline Packet
-        if (!player->loggedIn) {
-          std::stringstream in(input.erase(0, 8));
-          std::string val;
-          std::vector<std::string> vals;
-
-          while (std::getline(in, val, '\0')) {
-            vals.push_back(val);
-          }
-
-          vals.erase(std::remove(vals.begin() + 2, vals.end(), "\0"), vals.end());
-          player->name = vals[0];
-          player->ID = vals[1];
-
-          std::cout << "User signed in as " << player->name << std::endl;
-
-          std::string out = (
-            std::string(1, static_cast<char>(_serverOffset + 12)) +
-            std::string(2, '\0') +
-            "Success"
-          );
-          std::string header = (
-            std::string(3, '\0') +
-            std::string(1, static_cast<char>(out.size()))
-          );
-          _tcp->Send(player->socket, header + out);
-
-          player->loggedIn = true;
-        }
-        else {
-          std::cout << static_cast<int>(input[5]) << std::endl;
-          switch (input[5]) {
-            case 0: {
-              break;
-            }
-            case 1: {
-              break;
-            }
-            case 2: { // Create Room
-              SendChat(player, "You may not create a room. Please press &BACK;, followed by &START;.");
-              break;
-            }
-          }
-        }
-
         break;
       }
       case 13: { // Reserved
@@ -357,7 +214,6 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
         break;
       }
       case 15: { // XML Packet
-        std::cout << "congrats you are win!" << std::endl;
         break;
       }
     }
