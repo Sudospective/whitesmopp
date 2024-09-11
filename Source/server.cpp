@@ -166,9 +166,15 @@ void Server::SendChat(Client* player, std::string msg) {
 
 void Server::Read(Client* player, std::vector<std::string> inputs) {
   for (std::string input : inputs) {
-    std::cout << player->IP << " sent message on protocol " << static_cast<int>(input[4]) << std::endl;
-    switch (input[4]) {
+    nlohmann::json jSend;
+    nlohmann::json jRecv = nlohmann::json::parse(input.erase(input.find_first_of('\0')));
+    int cmd = jRecv["command"];
+    std::cout << player->IP << " sent command " << cmd << std::endl;
+    switch (cmd) {
       case 0: { // Ping
+        jSend["command"] = _serverOffset + 1;
+        jSend["message"] = "Pong";
+        _tcp->Send(player->socket, jSend.dump());
         break;
       }
       case 1: { // Ping Response
@@ -177,10 +183,10 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
       case 2: { // Hello
         break;
       }
-      case 3: { // Game Start
+      case 3: { // Client Info
         break;
       }
-      case 4: { // Game End
+      case 4: { // Client Status
         break;
       }
       case 5: { // Game Status Update
@@ -196,6 +202,21 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
         break;
       }
       case 9: { // White Elephant
+        int action = jRecv["action"];
+        switch (action) {
+          case 0: {
+            break;
+          }
+          case 1: {
+            break;
+          }
+          case 2: {
+            break;
+          }
+          case 3: {
+            break;
+          }
+        }
         break;
       }
       case 10: { // User Status
