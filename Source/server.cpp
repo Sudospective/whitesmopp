@@ -47,13 +47,12 @@ void Server::Start() {
   };
 
   _tcp = new CTCPServer(logger, std::to_string(_port).c_str());
+  
+  std::vector<std::thread> threads;
 
   _running = true;
 
   std::cout << "Server started." << std::endl;
-
-  _room.name = "White Elephant 2024";
-  _room.description = "Merry Christmas!";
 
   // th antilambda
   std::function reader = [&](Client* player) {
@@ -65,7 +64,7 @@ void Server::Start() {
           continue;
         _mutex.lock();
         if (read == 0) {
-          std::cout << "User " << player->name << " (" << player->IP << ") disconnected." << std::endl;
+          std::cout << "User " << player->name << " disconnected." << std::endl;
           _tcp->Disconnect(player->socket);
           player->connected = false;
         }
@@ -88,7 +87,6 @@ void Server::Start() {
 
   // th omnilambda
   std::function listener = [&]() {
-    std::vector<std::thread> threads;
     while (_running) {
       ASocket::Socket socket;
       if (_tcp->Listen(socket)) {
@@ -96,7 +94,14 @@ void Server::Start() {
         _tcp->Receive(socket, input, 1024, false);
         std::string inputStr = std::string(input, 1024);
         inputStr = inputStr.erase(inputStr.find_first_of('\0'));
-        nlohmann::json jRecv = nlohmann::json::parse(inputStr);
+        nlohmann::json jRecv;
+        try {
+          jRecv = nlohmann::json::parse(inputStr);
+        }
+        catch (...) {
+          std::cout << "Error: invalid or malformed JSON." << std::endl;
+          continue;
+        }
         if (jRecv["command"] == 2) {
           while (!ServerManager::GetInstance()->isConnecting)
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -104,11 +109,12 @@ void Server::Start() {
           Client c;
           c.socket = socket;
           c.IP = ServerManager::GetInstance()->connectingIP;
+          c.name = jRecv["data"]["name"];
+          c.ID = jRecv["data"]["ID"];
           c.connected = true;
-          std::cout << "New player from IP address " << c.IP << std::endl;
+          std::cout << "New player connected: " << c.name << std::endl;
           nlohmann::json jSend;
           jSend["command"] = _serverOffset + 2;
-          jSend["data"]["offset"] = _serverOffset;
           jSend["data"]["message"] = "Hello";
           jSend["status"] = "connected";
           _tcp->Send(socket, jSend.dump());
@@ -121,8 +127,10 @@ void Server::Start() {
           _tcp->Disconnect(socket);
       }
     }
+    _mutex.lock();
     for (std::thread& thread : threads)
       thread.join();
+    _mutex.unlock();
   };
 
   _thread = new std::thread(listener);
@@ -168,7 +176,16 @@ void Server::SendChat(Client* player, std::string msg) {
 void Server::Read(Client* player, std::vector<std::string> inputs) {
   for (std::string input : inputs) {
     nlohmann::json jSend;
-    nlohmann::json jRecv = nlohmann::json::parse(input.erase(input.find_first_of('\0')));
+    nlohmann::json jRecv;
+    try {
+      jRecv = nlohmann::json::parse(input.erase(input.find_first_of('\0')));
+    }
+    catch (...) {
+      std::cout << "Error: invalid or malformed JSON." << std::endl;
+      continue;
+    }
+    if (jRecv == nullptr)
+      continue;
     int cmd = jRecv["command"];
     std::cout << player->IP << " sent command " << cmd << std::endl;
     switch (cmd) {
@@ -250,5 +267,4 @@ bool Server::IsRunning() const { return _running; }
 std::string Server::GetName() const { return _name; }
 unsigned int Server::GetPort() const { return _port; }
 std::vector<Client*> Server::GetPlayers() const { return _players; }
-Room Server::GetRoom() const { return _room; }
 CTCPServer* Server::GetConnection() const { return _tcp; }

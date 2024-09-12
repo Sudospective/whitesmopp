@@ -8,6 +8,12 @@
 
 #include "TCPServer.h"
 
+struct Gift {
+  std::string ID;
+  std::string author;
+  bool stealable;
+};
+
 struct Client {
   bool connected = false;
   bool loggedIn = false;
@@ -18,14 +24,6 @@ struct Client {
   std::string gift;
   std::vector<std::string> inputs;
   ASocket::Socket socket;
-};
-
-struct Room {
-  int state;
-  std::string name;
-  std::string description;
-  std::string password;
-  std::vector<Client*> players;
 };
 
 class Server {
@@ -47,7 +45,6 @@ class Server {
   unsigned int GetPort() const;
   std::string GetName() const;
   std::vector<Client*> GetPlayers() const;
-  Room GetRoom() const;
   CTCPServer* GetConnection() const;
 
  private:
@@ -55,7 +52,6 @@ class Server {
   std::mutex _mutex;
   std::thread* _thread;
   std::vector<Client*> _players;
-  Room _room;
   CTCPServer* _tcp;
 
   const unsigned int _serverOffset = 128;
