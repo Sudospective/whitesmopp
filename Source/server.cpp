@@ -108,8 +108,9 @@ void Server::Start() {
           std::cout << "New player from IP address " << c.IP << std::endl;
           nlohmann::json jSend;
           jSend["command"] = _serverOffset + 2;
-          jSend["offset"] = _serverOffset;
-          jSend["message"] = "Hello";
+          jSend["data"]["offset"] = _serverOffset;
+          jSend["data"]["message"] = "Hello";
+          jSend["status"] = "connected";
           _tcp->Send(socket, jSend.dump());
           _players.push_back(&c);
           threads.push_back(std::thread(reader, &c));
@@ -173,7 +174,7 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
     switch (cmd) {
       case 0: { // Ping
         jSend["command"] = _serverOffset + 1;
-        jSend["message"] = "Pong";
+        jSend["data"]["message"] = "Pong";
         _tcp->Send(player->socket, jSend.dump());
         break;
       }
