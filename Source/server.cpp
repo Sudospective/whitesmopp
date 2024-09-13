@@ -217,7 +217,7 @@ void Server::SelectGift(Client* player, Client* other, Gift* gift) {
   j["command"] = _serverOffset + 5;
   j["data"]["action"] = 2;
   j["data"]["message"] = "Select Gift";
-  j["data"]["player"] = player->ID;
+  j["data"]["player"] = other->ID;
   j["data"]["gift"] = gift->ID;
   _tcp->Send(player->socket, j.dump());
 }
