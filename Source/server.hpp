@@ -9,21 +9,20 @@
 #include "TCPServer.h"
 
 struct Gift {
-  std::string ID;
+  int ID;
   std::string author;
-  bool stealable;
 };
 
 struct Client {
   bool connected = false;
-  bool loggedIn = false;
   bool inRoom = false;
+  bool ready = false;
   std::string name;
   std::string ID;
   std::string IP;
-  std::string gift;
   std::vector<std::string> inputs;
   ASocket::Socket socket;
+  Gift* gift;
 };
 
 class Server {
@@ -34,8 +33,9 @@ class Server {
  public:
   void Start();
   void Update();
-  void ListPlayers(Client* player, std::vector<Client*> allPlayers);
-  void SendChat(Client* player, std::string msg);
+  void ListPlayersInRoom(Client* player, std::vector<Client*> allPlayers);
+  void ListGifts(Client* player, std::vector<Gift*> allGifts);
+  void StartGame(Client* player);
   void Read(Client* player, std::vector<std::string> inputs);
   void Stop();
 
@@ -45,18 +45,22 @@ class Server {
   unsigned int GetPort() const;
   std::string GetName() const;
   std::vector<Client*> GetPlayers() const;
+  std::vector<Gift*> GetGifts() const;
   CTCPServer* GetConnection() const;
 
  private:
   bool _running;
+  bool _locked;
   std::mutex _mutex;
   std::thread* _thread;
   std::vector<Client*> _players;
+  std::vector<Gift*> _gifts;
+  Gift* _currentGift;
   CTCPServer* _tcp;
 
   const unsigned int _serverOffset = 128;
   const unsigned int _serverVersion = 128;
-  const unsigned int _port = 8765;
+  const unsigned int _port = 9876;
   const std::string _name = "White Elephant 2024";
 };
 
