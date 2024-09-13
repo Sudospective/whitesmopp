@@ -157,9 +157,6 @@ void Server::Start() {
 }
 
 void Server::Update() {
-  //_mutex.lock();
-  //ServerManager::GetInstance()->isConnecting = false;
-  //_mutex.unlock();
   for (Client* player : _players) {
     _mutex.lock();
     std::vector<std::string> inputs = player->inputs;
@@ -204,6 +201,33 @@ void Server::StartGame(Client* player) {
   j["command"] = _serverOffset + 5;
   j["data"]["action"] = 0;
   j["data"]["message"] = "Game Start";
+  _tcp->Send(player->socket, j.dump());
+}
+
+void Server::EndGame(Client* player) {
+  nlohmann::json j;
+  j["command"] = _serverOffset + 5;
+  j["data"]["action"] = 1;
+  j["data"]["message"] = "Game End";
+  _tcp->Send(player->socket, j.dump());
+}
+
+void Server::SelectGift(Client* player, Client* other, Gift* gift) {
+  nlohmann::json j;
+  j["command"] = _serverOffset + 5;
+  j["data"]["action"] = 2;
+  j["data"]["message"] = "Select Gift";
+  j["data"]["player"] = player->ID;
+  j["data"]["gift"] = gift->ID;
+  _tcp->Send(player->socket, j.dump());
+}
+
+void Server::OpenGift(Client* player, Gift* gift) {
+  nlohmann::json j;
+  j["command"] = _serverOffset + 5;
+  j["data"]["action"] = 3;
+  j["data"]["message"] = "Open Gift";
+  j["data"]["gift"] = gift->ID;
   _tcp->Send(player->socket, j.dump());
 }
 
@@ -265,9 +289,12 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
             _mutex.lock();
             std::vector<Client*> players = _players;
             _mutex.unlock();
-            for (Client* other : players)
-              if (other->inRoom)
+            for (Client* other : players) {
+              if (other->inRoom) {
                 ListPlayersInRoom(other, players);
+                ListGifts(other, _gifts);
+              }
+            }
             break;
           }
           case 1: { // Leave Room
@@ -278,9 +305,12 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
             jSend["data"]["action"] = 1;
             jSend["data"]["message"] = "Success";
             _tcp->Send(player->socket, jSend.dump());
-            for (Client* other : _players)
-              if (other->inRoom)
+            for (Client* other : _players) {
+              if (other->inRoom) {
                 ListPlayersInRoom(other, _players);
+                ListGifts(other, _gifts);
+              }
+            }
             break;
           }
           case 2: { // Ready
@@ -299,9 +329,15 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
             jSend["data"]["starting"] = allReady;
             _tcp->Send(player->socket, jSend.dump());
             if (allReady) {
-              for (Client* other: _players) {
-                if (other->inRoom && other->ready)
-                  StartGame(other);
+              for (Client* other : _players) {
+                if (other->inRoom && other->ready) {
+                  if (_currentGift == nullptr)
+                    StartGame(other);
+                  else {
+                    OpenGift(other, _currentGift);
+                    _currentGift == nullptr;
+                  }
+                }
               }
             }
           }
@@ -329,7 +365,20 @@ void Server::Read(Client* player, std::vector<std::string> inputs) {
           case 1: { // Game End
             break;
           }
-          case 2: { // Pick Gift
+          case 2: { // Select Gift
+            int id = jRecv["data"]["gift"];
+            auto result = std::find_if(
+              _gifts.begin(),
+              _gifts.end(),
+              [&id](Gift* g) { return g->ID == id; }
+            );
+            if (result != _gifts.end()) {
+              Gift* gift = *result;
+              player->gift = gift;
+              for (Client* other : _players) {
+                SelectGift(other, player, player->gift);
+              }
+            }
             break;
           }
           case 3: { // Open Gift

@@ -11,6 +11,7 @@
 struct Gift {
   int ID;
   std::string author;
+  bool selectable;
 };
 
 struct Client {
@@ -33,9 +34,15 @@ class Server {
  public:
   void Start();
   void Update();
+
   void ListPlayersInRoom(Client* player, std::vector<Client*> allPlayers);
   void ListGifts(Client* player, std::vector<Gift*> allGifts);
+
   void StartGame(Client* player);
+  void EndGame(Client* player);
+  void SelectGift(Client* player, Client* other, Gift* gift);
+  void OpenGift(Client* player, Gift* gift);
+
   void Read(Client* player, std::vector<std::string> inputs);
   void Stop();
 
