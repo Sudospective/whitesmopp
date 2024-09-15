@@ -9,18 +9,18 @@
 #include "TCPServer.h"
 
 struct Gift {
+  bool selectable;
   int ID;
   std::string author;
-  bool selectable;
 };
 
 struct Client {
   bool connected = false;
   bool inRoom = false;
   bool ready = false;
-  std::string name;
   std::string ID;
   std::string IP;
+  std::string name;
   std::vector<std::string> inputs;
   ASocket::Socket socket;
   Gift* gift;
@@ -32,11 +32,9 @@ class Server {
   ~Server();
 
  public:
-  void Start();
-  void Update();
-
   void ListPlayersInRoom(Client* player, std::vector<Client*> allPlayers);
   void ListGifts(Client* player, std::vector<Gift*> allGifts);
+  void ListPlayersReady(Client* player, std::vector<Client*> allPlayers);
 
   void StartGame(Client* player);
   void EndGame(Client* player);
@@ -44,6 +42,9 @@ class Server {
   void OpenGift(Client* player, Gift* gift);
 
   void Read(Client* player, std::vector<std::string> inputs);
+
+  void Start();
+  void Update();
   void Stop();
 
  // just in case

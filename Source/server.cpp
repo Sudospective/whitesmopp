@@ -1,7 +1,5 @@
 #include "server.hpp"
 
-#include <ctime>
-
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -21,6 +19,258 @@ Server::~Server() {
     delete _tcp;
   if (_thread != nullptr)
     delete _thread;
+}
+
+void Server::ListPlayersInRoom(Client* player, std::vector<Client*> allPlayers) {
+  nlohmann::json j;
+  j["command"] = _serverOffset + 4;
+  j["data"]["action"] = 0;
+  j["data"]["message"] = "Player List";
+  int numPlayers = 0;
+  for (Client* other : allPlayers) {
+    if (other->inRoom) {
+      j["data"]["players"][other->ID] = other->name;
+      numPlayers++;
+    }
+  }
+  j["data"]["player_count"] = numPlayers;
+  _tcp->Send(player->socket, j.dump());
+}
+
+void Server::ListGifts(Client* player, std::vector<Gift*> allGifts) {
+  nlohmann::json j;
+  j["command"] = _serverOffset + 4;
+  j["data"]["action"] = 1;
+  j["data"]["message"] = "Gift List";
+  int numGifts = 0;
+  for (Gift* gift : allGifts) {
+    j["data"]["gifts"][std::to_string(gift->ID)] = gift->author;
+    numGifts++;
+  }
+  j["data"]["gift_count"] = numGifts;
+  _tcp->Send(player->socket, j.dump());
+}
+
+void Server::ListPlayersReady(Client* player, std::vector<Client*> allPlayers) {
+  nlohmann::json j;
+  j["command"] = _serverOffset + 4;
+  j["data"]["action"] = 2;
+  j["data"]["message"] = "Ready List";
+  int numReady = 0;
+  for (Client* other : allPlayers) {
+    if (other->ready) {
+      j["data"]["players"][player->ID] = player->name;
+      numReady++;
+    }
+  }
+  j["data"]["player_count"] = numReady;
+  _tcp->Send(player->socket, j.dump());
+}
+
+void Server::StartGame(Client* player) {
+  nlohmann::json j;
+  j["command"] = _serverOffset + 5;
+  j["data"]["action"] = 0;
+  j["data"]["message"] = "Game Start";
+  _tcp->Send(player->socket, j.dump());
+}
+
+void Server::EndGame(Client* player) {
+  nlohmann::json j;
+  j["command"] = _serverOffset + 5;
+  j["data"]["action"] = 1;
+  j["data"]["message"] = "Game End";
+  _tcp->Send(player->socket, j.dump());
+}
+
+void Server::SelectGift(Client* player, Client* other, Gift* gift) {
+  nlohmann::json j;
+  j["command"] = _serverOffset + 5;
+  j["data"]["action"] = 2;
+  j["data"]["message"] = "Select Gift";
+  j["data"]["player"] = other->ID;
+  j["data"]["gift"] = gift->ID;
+  _tcp->Send(player->socket, j.dump());
+}
+
+void Server::OpenGift(Client* player, Gift* gift) {
+  nlohmann::json j;
+  j["command"] = _serverOffset + 5;
+  j["data"]["action"] = 3;
+  j["data"]["message"] = "Open Gift";
+  j["data"]["player"] = player->ID;
+  j["data"]["gift"] = gift->ID;
+  _tcp->Send(player->socket, j.dump());
+}
+
+void Server::Read(Client* player, std::vector<std::string> inputs) {
+  for (std::string input : inputs) {
+    nlohmann::json jRecv;
+    try {
+      jRecv = nlohmann::json::parse(input.erase(input.find_first_of('\0')));
+    }
+    catch (...) {
+      std::cout << "Error: invalid or malformed JSON." << std::endl;
+      continue;
+    }
+    if (jRecv == nullptr)
+      continue;
+    int cmd = jRecv["command"];
+    std::cout << player->IP << " sent command " << cmd << std::endl;
+    switch (cmd) {
+      case 0: { // Ping
+        auto now = std::chrono::system_clock::now();
+        auto duration = now.time_since_epoch();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+        nlohmann::json jSend;
+        jSend["command"] = _serverOffset + 1;
+        jSend["data"]["message"] = "Pong";
+        jSend["data"]["timestamp"] = ms;
+        _tcp->Send(player->socket, jSend.dump());
+        break;
+      }
+      case 1: { // Ping Response
+        auto now = std::chrono::system_clock::now();
+        auto duration = now.time_since_epoch();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+        int64_t time = ms - static_cast<int64_t>(jRecv["data"]["timestamp"]);
+        std::cout << "Ping took " << time << "ms" << std::endl;
+        break;
+      }
+      case 2: { // Hello
+        if (!player->name.empty()) {
+          std::cout << "Player already signed in as " << player->name << "." << std::endl;
+          nlohmann::json jSend;
+          jSend["command"] = _serverOffset - 1;
+          jSend["data"]["message"] = "Already connected";
+          _tcp->Send(player->socket, jSend.dump());
+        }
+        break;
+      }
+      case 3: { // Client Event
+        int action = jRecv["data"]["action"];
+        switch (action) {
+          case 0: { // Join Room
+            player->inRoom = true;
+            std::cout << player->name << " has joined the room." << std::endl;
+            nlohmann::json jSend;
+            jSend["command"] = _serverOffset + 3;
+            jSend["data"]["action"] = 0;
+            jSend["data"]["message"] = "Success";
+            _tcp->Send(player->socket, jSend.dump());
+            for (Client* other : _players) {
+              if (other->inRoom) {
+                ListPlayersInRoom(other, _players);
+                ListGifts(other, _gifts);
+              }
+            }
+            break;
+          }
+          case 1: { // Leave Room
+            player->inRoom = false;
+            std::cout << player->name << " has left the room." << std::endl;
+            nlohmann::json jSend;
+            jSend["command"] = _serverOffset + 3;
+            jSend["data"]["action"] = 1;
+            jSend["data"]["message"] = "Success";
+            _tcp->Send(player->socket, jSend.dump());
+            for (Client* other : _players) {
+              if (other->inRoom) {
+                ListPlayersInRoom(other, _players);
+                ListGifts(other, _gifts);
+              }
+            }
+            break;
+          }
+          case 2: { // Ready
+            player->ready = true;
+            std::cout << player->name << " is ready." << std::endl;
+            nlohmann::json jSend;
+            jSend["command"] = _serverOffset + 3;
+            jSend["data"]["action"] = 2;
+            jSend["data"]["message"] = "Success";
+            _tcp->Send(player->socket, jSend.dump());
+            for (Client* other : _players) {
+              ListPlayersReady(other, _players);
+            }
+            break;
+          }
+          case 3: { // Unready
+            player->ready = false;
+            std::cout << player->name << " is unready." << std::endl;
+            nlohmann::json jSend;
+            jSend["command"] = _serverOffset + 3;
+            jSend["data"]["action"] = 3;
+            jSend["data"]["message"] = "Success";
+            _tcp->Send(player->socket, jSend.dump());
+            for (Client* other : _players) {
+              ListPlayersReady(other, _players);
+            }
+            break;
+          }
+        }
+        break;
+      }
+      case 4: { // Server Event (DO NOT SEND PACKET HERE)
+        int action = jRecv["data"]["action"];
+        switch (action) {
+          case 0: { // List Players
+            break;
+          }
+          case 1: { // List Gifts
+            break;
+          }
+          case 2: { // List Ready
+            break;
+          }
+        }
+        break;
+      }
+      case 5: { // White Elephant Event
+        int action = jRecv["data"]["action"];
+        switch (action) {
+          case 0: { // Game Start
+            break;
+          }
+          case 1: { // Game End
+            break;
+          }
+          case 2: { // Select Gift
+            int id = jRecv["data"]["gift"];
+            auto result = std::find_if(
+              _gifts.begin(),
+              _gifts.end(),
+              [&id](Gift* g) { return g->ID == id; }
+            );
+            if (result != _gifts.end()) {
+              Gift* gift = *result;
+              player->gift = gift;
+              for (Client* other : _players) {
+                SelectGift(other, player, player->gift);
+              }
+            }
+            break;
+          }
+          case 3: { // Open Gift
+            break;
+          }
+        }
+        break;
+      }
+      case 6: { // StepMania Event
+        int action = jRecv["data"]["action"];
+        switch (action) {
+          case 0: { // Enter Screen
+            break;
+          }
+          case 1: { // Exit Screen
+            break;
+          }
+        }
+        break;
+      }
+    }
+  }
 }
 
 void Server::Start() {
@@ -163,236 +413,6 @@ void Server::Update() {
     player->inputs.clear();
     _mutex.unlock();
     Read(player, inputs);
-  }
-}
-
-void Server::ListPlayersInRoom(Client* player, std::vector<Client*> allPlayers) {
-  nlohmann::json j;
-  j["command"] = _serverOffset + 4;
-  j["data"]["action"] = 0;
-  j["data"]["message"] = "Player List";
-  int numPlayers = 0;
-  for (Client* other : allPlayers) {
-    if (other->inRoom) {
-      j["data"]["players"][other->ID] = other->name;
-      numPlayers++;
-    }
-  }
-  j["data"]["player_count"] = numPlayers;
-  _tcp->Send(player->socket, j.dump());
-}
-
-void Server::ListGifts(Client* player, std::vector<Gift*> allGifts) {
-  nlohmann::json j;
-  j["command"] = _serverOffset + 4;
-  j["data"]["action"] = 1;
-  j["data"]["message"] = "Gift List";
-  int numGifts = 0;
-  for (Gift* gift : allGifts) {
-    j["data"]["gifts"][std::to_string(gift->ID)] = gift->author;
-    numGifts++;
-  }
-  j["data"]["gift_count"] = numGifts;
-  _tcp->Send(player->socket, j.dump());
-}
-
-void Server::StartGame(Client* player) {
-  nlohmann::json j;
-  j["command"] = _serverOffset + 5;
-  j["data"]["action"] = 0;
-  j["data"]["message"] = "Game Start";
-  _tcp->Send(player->socket, j.dump());
-}
-
-void Server::EndGame(Client* player) {
-  nlohmann::json j;
-  j["command"] = _serverOffset + 5;
-  j["data"]["action"] = 1;
-  j["data"]["message"] = "Game End";
-  _tcp->Send(player->socket, j.dump());
-}
-
-void Server::SelectGift(Client* player, Client* other, Gift* gift) {
-  nlohmann::json j;
-  j["command"] = _serverOffset + 5;
-  j["data"]["action"] = 2;
-  j["data"]["message"] = "Select Gift";
-  j["data"]["player"] = other->ID;
-  j["data"]["gift"] = gift->ID;
-  _tcp->Send(player->socket, j.dump());
-}
-
-void Server::OpenGift(Client* player, Gift* gift) {
-  nlohmann::json j;
-  j["command"] = _serverOffset + 5;
-  j["data"]["action"] = 3;
-  j["data"]["message"] = "Open Gift";
-  j["data"]["gift"] = gift->ID;
-  _tcp->Send(player->socket, j.dump());
-}
-
-void Server::Read(Client* player, std::vector<std::string> inputs) {
-  for (std::string input : inputs) {
-    nlohmann::json jRecv;
-    try {
-      jRecv = nlohmann::json::parse(input.erase(input.find_first_of('\0')));
-    }
-    catch (...) {
-      std::cout << "Error: invalid or malformed JSON." << std::endl;
-      continue;
-    }
-    if (jRecv == nullptr)
-      continue;
-    int cmd = jRecv["command"];
-    std::cout << player->IP << " sent command " << cmd << std::endl;
-    switch (cmd) {
-      case 0: { // Ping
-        auto now = std::chrono::system_clock::now();
-        auto duration = now.time_since_epoch();
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-        nlohmann::json jSend;
-        jSend["command"] = _serverOffset + 1;
-        jSend["data"]["message"] = "Pong";
-        jSend["data"]["timestamp"] = ms;
-        _tcp->Send(player->socket, jSend.dump());
-        break;
-      }
-      case 1: { // Ping Response
-        auto now = std::chrono::system_clock::now();
-        auto duration = now.time_since_epoch();
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-        int64_t time = ms - static_cast<int64_t>(jRecv["data"]["timestamp"]);
-        std::cout << "Ping took " << time << "ms" << std::endl;
-        break;
-      }
-      case 2: { // Hello
-        if (!player->name.empty()) {
-          std::cout << "Player already signed in as " << player->name << "." << std::endl;
-          nlohmann::json jSend;
-          jSend["command"] = _serverOffset - 1;
-          jSend["data"]["message"] = "Already connected";
-          _tcp->Send(player->socket, jSend.dump());
-        }
-        break;
-      }
-      case 3: { // Client Event
-        int action = jRecv["data"]["action"];
-        switch (action) {
-          case 0: { // Join Room
-            player->inRoom = true;
-            std::cout << player->name << " has joined the room." << std::endl;
-            nlohmann::json jSend;
-            jSend["command"] = _serverOffset + 3;
-            jSend["data"]["action"] = 0;
-            jSend["data"]["message"] = "Success";
-            _tcp->Send(player->socket, jSend.dump());
-            _mutex.lock();
-            std::vector<Client*> players = _players;
-            _mutex.unlock();
-            for (Client* other : players) {
-              if (other->inRoom) {
-                ListPlayersInRoom(other, players);
-                ListGifts(other, _gifts);
-              }
-            }
-            break;
-          }
-          case 1: { // Leave Room
-            player->inRoom = false;
-            std::cout << player->name << " has left the room." << std::endl;
-            nlohmann::json jSend;
-            jSend["command"] = _serverOffset + 3;
-            jSend["data"]["action"] = 1;
-            jSend["data"]["message"] = "Success";
-            _tcp->Send(player->socket, jSend.dump());
-            for (Client* other : _players) {
-              if (other->inRoom) {
-                ListPlayersInRoom(other, _players);
-                ListGifts(other, _gifts);
-              }
-            }
-            break;
-          }
-          case 2: { // Ready
-            player->ready = true;
-            bool allReady = true;
-            for (Client* other : _players) {
-              if (!other->ready) {
-                allReady = false;
-                break;
-              }
-            }
-            nlohmann::json jSend;
-            jSend["command"] = _serverOffset + 3;
-            jSend["data"]["action"] = 2;
-            jSend["data"]["message"] = "Success";
-            jSend["data"]["starting"] = allReady;
-            _tcp->Send(player->socket, jSend.dump());
-            if (allReady) {
-              for (Client* other : _players) {
-                if (other->inRoom && other->ready) {
-                  if (_currentGift == nullptr)
-                    StartGame(other);
-                  else {
-                    OpenGift(other, _currentGift);
-                    _currentGift == nullptr;
-                  }
-                }
-              }
-            }
-          }
-        }
-        break;
-      }
-      case 4: { // Server Event (DO NOT SEND PACKET HERE)
-        int action = jRecv["data"]["action"];
-        switch (action) {
-          case 0: { // List Players
-            break;
-          }
-          case 1: { // List Gifts
-            break;
-          }
-        }
-        break;
-      }
-      case 5: { // White Elephant Event
-        int action = jRecv["data"]["action"];
-        switch (action) {
-          case 0: { // Game Start
-            break;
-          }
-          case 1: { // Game End
-            break;
-          }
-          case 2: { // Select Gift
-            int id = jRecv["data"]["gift"];
-            auto result = std::find_if(
-              _gifts.begin(),
-              _gifts.end(),
-              [&id](Gift* g) { return g->ID == id; }
-            );
-            if (result != _gifts.end()) {
-              Gift* gift = *result;
-              player->gift = gift;
-              for (Client* other : _players) {
-                SelectGift(other, player, player->gift);
-              }
-            }
-            break;
-          }
-          case 3: { // Open Gift
-            break;
-          }
-        }
-        break;
-      }
-      case 6: { // StepMania Event
-        int action = jRecv["data"]["action"];
-        switch (action) {}
-        break;
-      }
-    }
   }
 }
 
