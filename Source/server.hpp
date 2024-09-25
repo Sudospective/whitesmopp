@@ -14,6 +14,11 @@ struct Gift {
   std::string author;
 };
 
+/*
+  The idea behind the client bools is:
+  - if !inRoom and ready, go to room (selectmusic)
+  - if inRoom and ready, open gift (gameplay)
+*/
 struct Client {
   bool connected = false;
   bool inRoom = false;
